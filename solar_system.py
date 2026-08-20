@@ -238,20 +238,27 @@ def _render_text(font, text, color):
     return font.render(text, True, color)
 
 
-def draw_menubar_overlay(surf, font, mouse_pos, menu_state, game_state):
+def draw_menubar_overlay(font, mouse_pos, menu_state, game_state):
     """
-    绘制顶部菜单栏 + 下拉菜单。
-    menu_state: dict with keys:
-        open_menu: str | None  — which menu dropdown is open
-    game_state: dict with simulation state
-    Returns dict of clickable rects.
+    用 OpenGL 绘制顶部菜单栏 + 下拉菜单（2D 正交投影覆盖层）。
     """
-    width, height = surf.get_size()
+    width, height = pygame.display.get_surface().get_size()
+
+    glDisable(GL_DEPTH_TEST)
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+    gluOrtho2D(0, width, height, 0)
+    glMatrixMode(GL_MODELVIEW)
+    glPushMatrix()
+    glLoadIdentity()
+    glDisable(GL_LIGHTING)
+
     rects = {}
 
     # ---- 菜单栏背景 ----
-    bar_rect = pygame.Rect(0, 0, width, MENUBAR_H)
-    _draw_filled_rect(surf, bar_rect, MENUBAR_BG)
+    glColor4f(MENUBAR_BG[0]/255, MENUBAR_BG[1]/255, MENUBAR_BG[2]/255, 1.0)
+    _gl_rect(0, 0, width, MENUBAR_H)
 
     # ---- 计算每个菜单项的位置 ----
     menu_names = list(MENU_ITEMS.keys())
@@ -264,8 +271,9 @@ def draw_menubar_overlay(surf, font, mouse_pos, menu_state, game_state):
         item_rects[name] = r
         hovered = r.collidepoint(mouse_pos)
         if hovered:
-            _draw_filled_rect(surf, r, MENUBAR_HOVER)
-        surf.blit(txt_surf, (x + 8, 5))
+            glColor4f(MENUBAR_HOVER[0]/255, MENUBAR_HOVER[1]/255, MENUBAR_HOVER[2]/255, 1.0)
+            _gl_rect(x, 0, w, MENUBAR_H)
+        _gl_blit_text(txt_surf, x + 8, 5, width, height)
         x += w + 2
 
     # ---- 下拉菜单 ----
@@ -274,7 +282,6 @@ def draw_menubar_overlay(surf, font, mouse_pos, menu_state, game_state):
         parent_rect = item_rects[open_name]
         items = MENU_ITEMS[open_name]
 
-        # 计算下拉面板尺寸
         max_w = 0
         for label, _ in items:
             tw = font.size(label)[0]
@@ -286,29 +293,41 @@ def draw_menubar_overlay(surf, font, mouse_pos, menu_state, game_state):
         drop_y = MENUBAR_H
         drop_rect = pygame.Rect(drop_x, drop_y, drop_w, drop_h)
 
-        # 面板
-        _draw_filled_rect(surf, drop_rect, MENU_BG)
-        _draw_rect_border(surf, drop_rect, MENU_BORDER)
+        # 面板背景
+        glColor4f(MENU_BG[0]/255, MENU_BG[1]/255, MENU_BG[2]/255, 0.95)
+        _gl_rect(drop_x, drop_y, drop_w, drop_h)
+        # 边框
+        glColor4f(MENU_BORDER[0]/255, MENU_BORDER[1]/255, MENU_BORDER[2]/255, 1.0)
+        _gl_rect_border(drop_x, drop_y, drop_w, drop_h)
 
-        # 菜单项
         for idx, (label, action) in enumerate(items):
             iy = drop_y + 4 + idx * 28
             ir = pygame.Rect(drop_x + 4, iy, drop_w - 8, 24)
             rects[f"item_{open_name}_{idx}"] = (action, ir)
             h = ir.collidepoint(mouse_pos)
             if h:
-                _draw_filled_rect(surf, ir, (50, 50, 100))
-            txt = _render_text(font, label, MENU_TEXT if not h else (255, 255, 255))
-            surf.blit(txt, (drop_x + 12, iy + 3))
+                glColor4f(50/255, 50/255, 100/255, 1.0)
+                _gl_rect(drop_x + 4, iy, drop_w - 8, 24)
+            txt_surf = _render_text(font, label, (255, 255, 255) if h else MENU_TEXT)
+            _gl_blit_text(txt_surf, drop_x + 12, iy + 3, width, height)
 
-    rects["menubar"] = bar_rect
+    rects["menubar"] = pygame.Rect(0, 0, width, MENUBAR_H)
     rects["menu_items"] = item_rects
+
+    glEnable(GL_LIGHTING)
+    glMatrixMode(GL_MODELVIEW)
+    glPopMatrix()
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
+    glEnable(GL_DEPTH_TEST)
+
     return rects
 
 
-def draw_help_about_overlay(surf, font, mouse_pos, mode):
-    """绘制帮助/关于弹窗覆盖层。mode='help' 或 'about'。返回关闭按钮 rect。"""
-    width, height = surf.get_size()
+def draw_help_about_overlay(font, mouse_pos, mode):
+    """用 OpenGL 绘制帮助/关于弹窗覆盖层。"""
+    width, height = pygame.display.get_surface().get_size()
 
     if mode == "help":
         lines = HELP_LINES
@@ -322,17 +341,29 @@ def draw_help_about_overlay(surf, font, mouse_pos, mode):
     panel_y = MENUBAR_H + 20
     panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
 
-    # 遮罩
-    overlay = pygame.Surface((width, height), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 120))
-    surf.blit(overlay, (0, 0))
+    glDisable(GL_DEPTH_TEST)
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+    gluOrtho2D(0, width, height, 0)
+    glMatrixMode(GL_MODELVIEW)
+    glPushMatrix()
+    glLoadIdentity()
+    glDisable(GL_LIGHTING)
 
-    _draw_filled_rect(surf, panel_rect, MENU_BG)
-    _draw_rect_border(surf, panel_rect, MENU_BORDER)
+    # 遮罩
+    glColor4f(0, 0, 0, 0.45)
+    _gl_rect(0, 0, width, height)
+
+    # 面板
+    glColor4f(MENU_BG[0]/255, MENU_BG[1]/255, MENU_BG[2]/255, 0.95)
+    _gl_rect(panel_x, panel_y, panel_w, panel_h)
+    glColor4f(MENU_BORDER[0]/255, MENU_BORDER[1]/255, MENU_BORDER[2]/255, 1.0)
+    _gl_rect_border(panel_x, panel_y, panel_w, panel_h)
 
     title_label = "操作说明" if mode == "help" else f"关于 v{VERSION}"
-    title = _render_text(font, title_label, MENU_TITLE)
-    surf.blit(title, (panel_x + MENU_PAD, panel_y + MENU_PAD))
+    txt_surf = _render_text(font, title_label, MENU_TITLE)
+    _gl_blit_text(txt_surf, panel_x + MENU_PAD, panel_y + MENU_PAD, width, height)
 
     y = panel_y + MENU_PAD + LINE_H + 5
     for line in lines:
@@ -345,21 +376,77 @@ def draw_help_about_overlay(surf, font, mouse_pos, mode):
         else:
             c = MENU_TEXT
         txt_surf = _render_text(font, line, c)
-        surf.blit(txt_surf, (panel_x + MENU_PAD, y))
+        _gl_blit_text(txt_surf, panel_x + MENU_PAD, y, width, height)
         y += LINE_H
 
     # 关闭按钮
     close_w, close_h = 70, 26
-    close_rect = pygame.Rect(panel_x + (panel_w - close_w) // 2,
-                             panel_y + panel_h - close_h - 10,
-                             close_w, close_h)
+    close_x = panel_x + (panel_w - close_w) // 2
+    close_y = panel_y + panel_h - close_h - 10
+    close_rect = pygame.Rect(close_x, close_y, close_w, close_h)
     ch = close_rect.collidepoint(mouse_pos)
-    _draw_filled_rect(surf, close_rect, BTN_HOVER if ch else BTN_BG)
-    _draw_rect_border(surf, close_rect, BTN_BORDER)
-    ct = _render_text(font, "关闭", BTN_TEXT)
-    surf.blit(ct, ct.get_rect(center=close_rect.center))
+    c_color = BTN_HOVER if ch else BTN_BG
+    glColor4f(c_color[0]/255, c_color[1]/255, c_color[2]/255, 1.0)
+    _gl_rect(close_x, close_y, close_w, close_h)
+    glColor4f(BTN_BORDER[0]/255, BTN_BORDER[1]/255, BTN_BORDER[2]/255, 1.0)
+    _gl_rect_border(close_x, close_y, close_w, close_h)
+    txt_surf = _render_text(font, "关闭", BTN_TEXT)
+    _gl_blit_text(txt_surf, close_x + close_w//2 - txt_surf.get_width()//2,
+                  close_y + close_h//2 - txt_surf.get_height()//2, width, height)
+
+    glEnable(GL_LIGHTING)
+    glMatrixMode(GL_MODELVIEW)
+    glPopMatrix()
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
+    glEnable(GL_DEPTH_TEST)
 
     return close_rect, panel_rect
+
+
+def _gl_rect(x, y, w, h):
+    """OpenGL 绘制填充矩形"""
+    glBegin(GL_QUADS)
+    glVertex2f(x, y)
+    glVertex2f(x + w, y)
+    glVertex2f(x + w, y + h)
+    glVertex2f(x, y + h)
+    glEnd()
+
+
+def _gl_rect_border(x, y, w, h):
+    """OpenGL 绘制矩形边框"""
+    glBegin(GL_LINE_LOOP)
+    glVertex2f(x, y)
+    glVertex2f(x + w, y)
+    glVertex2f(x + w, y + h)
+    glVertex2f(x, y + h)
+    glEnd()
+
+
+def _gl_blit_text(txt_surf, x, y, screen_w, screen_h):
+    """将 pygame Surface 作为纹理绘制到 OpenGL 矩形上"""
+    tw, th = txt_surf.get_width(), txt_surf.get_height()
+    # 将 pygame surface 转为像素数据
+    data = pygame.image.tostring(txt_surf, 'RGBA', True)
+    glEnable(GL_TEXTURE_2D)
+    tex = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D, tex)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tw, th, 0, GL_RGBA, GL_UNSIGNED_BYTE, data)
+
+    glColor4f(1, 1, 1, 1)
+    glBegin(GL_QUADS)
+    glTexCoord2f(0, 0); glVertex2f(x, y)
+    glTexCoord2f(1, 0); glVertex2f(x + tw, y)
+    glTexCoord2f(1, 1); glVertex2f(x + tw, y + th)
+    glTexCoord2f(0, 1); glVertex2f(x, y + th)
+    glEnd()
+
+    glDeleteTextures([tex])
+    glDisable(GL_TEXTURE_2D)
 
 
 def draw_scene(cam, speed, t, paused):
@@ -629,23 +716,13 @@ def main():
         draw_scene(cam, speed, t, paused)
 
         # ---- 2D overlay ----
-        glFinish()
-
         # 顶部菜单栏 + 下拉菜单
-        draw_menubar_overlay(screen, font, mouse_pos, menu_state,
-                            {'paused': paused, 'speed': speed})
+        rects = draw_menubar_overlay(font, mouse_pos, menu_state,
+                                     {'paused': paused, 'speed': speed})
 
         # 帮助/关于弹窗
         if popup_mode:
-            draw_help_about_overlay(screen, font, mouse_pos, popup_mode)
-
-        # 底部状态栏
-        status = "暂停" if paused else "运行中"
-        status_txt = font.render(
-            f'{status} | 速度: {speed:.1f}x | M-帮助 | 空格-暂停 | ESC-退出',
-            True, (180, 180, 200))
-        sw, sh = screen.get_size()
-        screen.blit(status_txt, (sw - status_txt.get_width() - 15, sh - 30))
+            draw_help_about_overlay(font, mouse_pos, popup_mode)
 
         pygame.display.flip()
         clock.tick(60)
