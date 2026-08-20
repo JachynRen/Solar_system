@@ -21,8 +21,8 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QOpenGLWidget, QMenuBar,
     QMenu, QAction, QMessageBox, QStatusBar, QLabel
 )
-from PyQt5.QtCore import Qt, QTimer, QSurfaceFormat
-from PyQt5.QtGui import QMouseEvent, QKeyEvent, QSurface
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QMouseEvent, QKeyEvent, QSurfaceFormat
 from OpenGL.GL import *
 from OpenGL.GLU import gluPerspective
 
@@ -167,6 +167,13 @@ class SolarSystemGLWidget(QOpenGLWidget):
         super().__init__(parent)
         self.parent_window = parent
 
+        # macOS 兼容 OpenGL profile
+        fmt = QSurfaceFormat()
+        fmt.setVersion(2, 1)
+        fmt.setProfile(QSurfaceFormat.CompatibilityProfile)
+        fmt.setSwapBehavior(QSurfaceFormat.DoubleBuffer)
+        self.setFormat(fmt)
+
         # 相机参数
         self.cam_rot_x = -25
         self.cam_rot_y = 0
@@ -229,6 +236,7 @@ class SolarSystemGLWidget(QOpenGLWidget):
         """渲染场景"""
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
+        glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
         glTranslatef(-self.cam_x, -self.cam_y, -self.cam_z)
         glTranslatef(0, 0, self.cam_distance)
