@@ -1,3 +1,2 @@
 pygame>=2.0
 PyOpenGL>=3.1
-pygame-menu>=4.5

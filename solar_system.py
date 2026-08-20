@@ -1,11 +1,10 @@
 """
 太阳系 3D 模拟程序
 使用 Pygame + OpenGL 展示太阳系八大行星的运动轨迹
-使用 pygame-menu 提供原生风格的菜单 UI
 
 操作方式：
-- 触控板单指拖动 / 鼠标左键拖动：旋转视角
-- 触控板双指捏合 / 鼠标滚轮 / 上下方向键：缩放
+- 鼠标左键拖动：旋转视角
+- 鼠标滚轮：缩放
 - I/J/K/L 键：相机前后左右移动（基于当前朝向）
 - U/O 键：相机上/下移动
 - 空格键：暂停/继续
@@ -13,7 +12,7 @@
 - A/D 键：水平旋转
 - W/S 键：垂直旋转
 - R 键：重置视角
-- M 键：打开菜单
+- M 键：菜单
 - ESC：退出
 """
 
@@ -23,7 +22,6 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 import math
 import sys
-import pygame_menu
 
 # 作者信息
 AUTHOR_NAME = "JachynRen"
@@ -159,65 +157,205 @@ def draw_stars():
     glEnable(GL_LIGHTING)
 
 
-def create_help_menu(menu_theme, width, height):
-    """创建帮助菜单"""
-    help_text = (
-        "=== 操作说明 ===\n\n"
-        "鼠标 / 触控板：\n"
-        "  左键拖动 / 单指拖动 - 旋转视角\n"
-        "  滚轮 / 双指捏合     - 缩放\n\n"
-        "键盘：\n"
-        "  W/S        - 俯仰旋转（上/下看）\n"
-        "  A/D        - 水平旋转（左/右转）\n"
-        "  I/J/K/L    - 相机前后左右移动\n"
-        "  U/O        - 相机上/下移动\n"
-        "  ↑/↓        - 缩放\n"
-        "  +/-        - 调整模拟速度\n"
-        "  空格       - 暂停/继续\n"
-        "  R          - 重置视角\n"
-        "  F          - 快速视角切换\n"
-        "  M          - 打开菜单\n"
-        "  ESC        - 退出\n"
-    )
+# ========== 2D UI 绘制 ==========
 
-    menu = pygame_menu.Menu('操作说明', width, height, theme=menu_theme)
-    menu.add.label(help_text, max_char=60, font_size=16, align=pygame_menu.locals.ALIGN_LEFT)
-    menu.add.button('关闭', pygame_menu.events.BACK)
-    return menu
+HELP_LINES = [
+    "=== 操作说明 ===",
+    "",
+    "鼠标左键拖动   旋转视角",
+    "鼠标滚轮       缩放",
+    "W/S            俯仰旋转",
+    "A/D            水平旋转",
+    "I/J/K/L        相机前后左右移动",
+    "U/O            相机上/下移动",
+    "+/-            调整模拟速度",
+    "空格           暂停/继续",
+    "R              重置视角",
+    "F              快速视角切换",
+    "M              打开菜单",
+    "ESC            退出",
+]
 
-
-def create_about_menu(menu_theme, width, height):
-    """创建关于菜单"""
-    menu = pygame_menu.Menu('关于', width, height, theme=menu_theme)
-    menu.add.label(f'太阳系 3D 模拟程序', font_size=20)
-    menu.add.label('')
-    menu.add.label(f'作者: {AUTHOR_NAME}', font_size=16)
-    menu.add.label(f'邮箱: {AUTHOR_EMAIL}', font_size=14)
-    menu.add.label(f'GitHub:', font_size=14)
-    menu.add.label(GITHUB_URL, font_size=12, font_color=(100, 180, 255))
-    menu.add.label('')
-    menu.add.button('关闭', pygame_menu.events.BACK)
-    return menu
+FONT_SIZE = 16
+LINE_H = 24
+MENU_PAD = 15
+MENU_BG = (25, 25, 45)
+MENU_BORDER = (80, 120, 180)
+MENU_TEXT = (220, 220, 230)
+MENU_TITLE = (255, 200, 80)
+BTN_BG = (40, 40, 80)
+BTN_BORDER = (100, 150, 200)
+BTN_TEXT = (220, 220, 220)
+BTN_HOVER = (60, 60, 120)
 
 
-def create_main_menu(menu_theme, width, height, help_menu, about_menu, game_state):
-    """创建主菜单"""
-    menu = pygame_menu.Menu('菜单', width, height, theme=menu_theme)
-    menu.add.button('操作说明', help_menu)
-    menu.add.button('关于', about_menu)
+def _draw_filled_rect(surf, rect, color):
+    pygame.draw.rect(surf, color, rect)
 
-    # 暂停/继续按钮
-    def toggle_pause():
-        game_state['paused'] = not game_state['paused']
 
-    def update_pause_label():
-        return '继续' if game_state['paused'] else '暂停'
+def _draw_rect_border(surf, rect, color, width=2):
+    pygame.draw.rect(surf, color, rect, width)
 
-    menu.add.selector('速度:', [(f'{s:.1f}x', s) for s in [0.5, 1.0, 2.0, 3.0, 5.0, 10.0]],
-                      onchange=lambda _, val: game_state.__setitem__('speed', val))
-    menu.add.button(update_pause_label, toggle_pause)
-    menu.add.button('返回模拟', pygame_menu.events.BACK)
-    return menu
+
+def _render_text(font, text, color):
+    return font.render(text, True, color)
+
+
+def draw_menu_overlay(surf, font, menu_open, mouse_pos, game_state):
+    """绘制菜单覆盖层（pygame 2D 渲染，在 flip 之前）"""
+    width, height = surf.get_size()
+
+    # ---- 菜单按钮 ----
+    btn_w, btn_h = 80, 32
+    btn_rect = pygame.Rect(12, 10, btn_w, btn_h)
+    hovered = btn_rect.collidepoint(mouse_pos)
+    _draw_filled_rect(surf, btn_rect, BTN_HOVER if hovered else BTN_BG)
+    _draw_rect_border(surf, btn_rect, BTN_BORDER)
+    txt = _render_text(font, "☰ 菜单", BTN_TEXT)
+    surf.blit(txt, txt.get_rect(center=btn_rect.center))
+
+    # ---- 弹窗 ----
+    if menu_open:
+        # 计算弹窗尺寸
+        lines = HELP_LINES + [
+            "",
+            f"作者: {AUTHOR_NAME}",
+            f"邮箱: {AUTHOR_EMAIL}",
+            f"GitHub: {GITHUB_URL}",
+        ]
+        max_char_w = max(font.size(line)[0] for line in lines)
+        panel_w = max_char_w + MENU_PAD * 2
+        panel_h = len(lines) * LINE_H + MENU_PAD * 2 + 40  # 额外给关闭按钮留空间
+        panel_x = (width - panel_w) // 2
+        panel_y = (height - panel_h) // 2
+        panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+
+        # 半透明背景遮罩
+        overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 120))
+        surf.blit(overlay, (0, 0))
+
+        # 面板背景
+        _draw_filled_rect(surf, panel_rect, MENU_BG)
+        _draw_rect_border(surf, panel_rect, MENU_BORDER)
+
+        # 标题
+        title = _render_text(font, "菜单", MENU_TITLE)
+        surf.blit(title, (panel_x + MENU_PAD, panel_y + MENU_PAD))
+
+        # 内容行
+        y = panel_y + MENU_PAD + LINE_H + 5
+        for line in lines:
+            if line.startswith("==="):
+                c = MENU_TITLE
+            elif line.startswith("作者") or line.startswith("邮箱") or line.startswith("GitHub"):
+                c = (150, 180, 220)
+            else:
+                c = MENU_TEXT
+            txt_surf = _render_text(font, line, c)
+            surf.blit(txt_surf, (panel_x + MENU_PAD, y))
+            y += LINE_H
+
+        # 关闭按钮
+        close_w, close_h = 80, 28
+        close_rect = pygame.Rect(panel_x + (panel_w - close_w) // 2,
+                                 panel_y + panel_h - close_h - 12,
+                                 close_w, close_h)
+        close_hovered = close_rect.collidepoint(mouse_pos)
+        _draw_filled_rect(surf, close_rect, BTN_HOVER if close_hovered else BTN_BG)
+        _draw_rect_border(surf, close_rect, BTN_BORDER)
+        close_txt = _render_text(font, "关闭", BTN_TEXT)
+        surf.blit(close_txt, close_txt.get_rect(center=close_rect.center))
+
+        return btn_rect, close_rect, panel_rect
+
+    return btn_rect, None, None
+
+
+def draw_scene(cam, speed, t, paused):
+    """绘制 3D 场景"""
+    glClearColor(0.02, 0.02, 0.05, 1.0)
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+    glMatrixMode(GL_MODELVIEW)
+    glLoadIdentity()
+    glTranslatef(-cam['x'], -cam['y'], -cam['z'])
+    glTranslatef(0, 0, cam['distance'])
+    glRotatef(cam['rot_x'], 1, 0, 0)
+    glRotatef(cam['rot_y'], 0, 1, 0)
+
+    glPushMatrix()
+    glRotatef(-cam['rot_y'], 0, 1, 0)
+    glRotatef(-cam['rot_x'], 1, 0, 0)
+    draw_stars()
+    glPopMatrix()
+
+    draw_sun()
+
+    for name, orbit_radius, radius, period, color, angle in PLANETS_DATA:
+        draw_orbit(orbit_radius)
+        angular_velocity = 2 * math.pi / period
+        current_angle = angle + angular_velocity * t * speed
+        px = orbit_radius * math.cos(current_angle)
+        pz = orbit_radius * math.sin(current_angle)
+
+        glPushMatrix()
+        glTranslatef(px, 0, pz)
+        if name == "土星":
+            glPushMatrix()
+            glRotatef(25, 1, 0, 0)
+            draw_saturn_ring(radius * 1.4, radius * 2.3)
+            glPopMatrix()
+        draw_sphere(radius, color)
+        glPopMatrix()
+
+
+def process_camera(cam, keys, dragging, velocity, damping):
+    """处理相机控制"""
+    if not dragging:
+        if abs(velocity['x']) > 0.01 or abs(velocity['y']) > 0.01:
+            cam['rot_y'] += velocity['x']
+            cam['rot_x'] += velocity['y']
+            cam['rot_x'] = max(-89, min(89, cam['rot_x']))
+            velocity['x'] *= damping
+            velocity['y'] *= damping
+
+    if keys[K_UP]:
+        cam['distance'] = max(30, cam['distance'] - 1)
+    if keys[K_DOWN]:
+        cam['distance'] = min(200, cam['distance'] + 1)
+    if keys[K_a]:
+        cam['rot_y'] -= 1.5
+    if keys[K_d]:
+        cam['rot_y'] += 1.5
+    if keys[K_w]:
+        cam['rot_x'] += 1.5
+        cam['rot_x'] = max(-89, min(89, cam['rot_x']))
+    if keys[K_s]:
+        cam['rot_x'] -= 1.5
+        cam['rot_x'] = max(-89, min(89, cam['rot_x']))
+
+    move_speed = 1.0
+    rot_rad_x = math.radians(cam['rot_x'])
+    rot_rad_y = math.radians(cam['rot_y'])
+    if keys[K_i]:
+        cam['x'] += math.sin(rot_rad_y) * math.cos(rot_rad_x) * move_speed
+        cam['y'] -= math.sin(rot_rad_x) * move_speed
+        cam['z'] += math.cos(rot_rad_y) * math.cos(rot_rad_x) * move_speed
+    if keys[K_k]:
+        cam['x'] -= math.sin(rot_rad_y) * math.cos(rot_rad_x) * move_speed
+        cam['y'] += math.sin(rot_rad_x) * move_speed
+        cam['z'] -= math.cos(rot_rad_y) * math.cos(rot_rad_x) * move_speed
+    if keys[K_j]:
+        cam['x'] += math.cos(rot_rad_y) * move_speed
+        cam['z'] -= math.sin(rot_rad_y) * move_speed
+    if keys[K_l]:
+        cam['x'] -= math.cos(rot_rad_y) * move_speed
+        cam['z'] += math.sin(rot_rad_y) * move_speed
+    if keys[K_u]:
+        cam['y'] += move_speed
+    if keys[K_o]:
+        cam['y'] -= move_speed
 
 
 def main():
@@ -246,13 +384,11 @@ def main():
     gluPerspective(60, width / height, 0.1, 500.0)
     glMatrixMode(GL_MODELVIEW)
 
-    # 相机参数
-    cam_rot_x = -25
-    cam_rot_y = 0
-    cam_distance = 90
-    cam_x = 0.0
-    cam_y = 0.0
-    cam_z = 0.0
+    # 相机
+    cam = {
+        'rot_x': -25, 'rot_y': 0, 'distance': 90,
+        'x': 0.0, 'y': 0.0, 'z': 0.0,
+    }
 
     clock = pygame.time.Clock()
     running = True
@@ -260,30 +396,14 @@ def main():
     t = 0
     paused = False
 
-    # 拖动状态
     dragging = False
     last_pos = (0, 0)
-
-    # 惯性滑动参数
-    velocity_x = 0.0
-    velocity_y = 0.0
+    velocity = {'x': 0.0, 'y': 0.0}
     damping = 0.92
 
-    # 游戏状态（供菜单引用）
-    game_state = {'paused': False, 'speed': 1.0}
-
-    # pygame-menu 主题
-    theme = pygame_menu.themes.THEME_BLUE.copy()
-    theme.title_background_color = (30, 30, 50)
-    theme.widget_alignment = pygame_menu.locals.ALIGN_CENTER
-
-    # 创建菜单
-    help_menu = create_help_menu(theme, 500, 600)
-    about_menu = create_about_menu(theme, 450, 400)
-    main_menu = create_main_menu(theme, 400, 500, help_menu, about_menu, game_state)
-
-    # 菜单按钮栏位置
-    menu_btn_rect = pygame.Rect(10, 10, 60, 30)
+    menu_open = False
+    mouse_pos = (0, 0)
+    font = pygame.font.SysFont("arial", FONT_SIZE)
 
     while running:
         events = pygame.event.get()
@@ -291,222 +411,88 @@ def main():
             if event.type == QUIT:
                 running = False
 
-            elif main_menu.is_enabled():
-                # 菜单打开时处理菜单事件
-                if main_menu.update(events):
-                    pass
-                # 同步游戏状态
-                paused = game_state['paused']
-                speed = game_state['speed']
-
             elif event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
                     running = False
                 elif event.key == K_SPACE:
                     paused = not paused
-                    game_state['paused'] = paused
                 elif event.key == K_PLUS or event.key == K_EQUALS:
                     speed = min(10.0, speed + 0.5)
-                    game_state['speed'] = speed
                 elif event.key == K_MINUS or event.key == K_UNDERSCORE:
                     speed = max(0.1, speed - 0.5)
-                    game_state['speed'] = speed
                 elif event.key == K_r:
-                    cam_rot_x = -25
-                    cam_rot_y = 0
-                    cam_distance = 90
-                    cam_x = 0.0
-                    cam_y = 0.0
-                    cam_z = 0.0
+                    cam['rot_x'] = -25
+                    cam['rot_y'] = 0
+                    cam['distance'] = 90
+                    cam['x'] = cam['y'] = cam['z'] = 0.0
                 elif event.key == K_f:
-                    cam_rot_x = -45
-                    cam_rot_y = cam_rot_y + 45
-                    cam_distance = 70
+                    cam['rot_x'] = -45
+                    cam['rot_y'] += 45
+                    cam['distance'] = 70
                 elif event.key == K_m:
-                    main_menu.enable()
+                    menu_open = not menu_open
 
             elif event.type == MOUSEBUTTONDOWN:
                 if event.button == 1:
-                    # 检查菜单按钮点击
-                    if menu_btn_rect.collidepoint(event.pos):
-                        main_menu.enable()
+                    mx, my = event.pos
+                    if menu_open:
+                        btn_rect, close_rect, panel_rect = draw_menu_overlay(
+                            screen, font, menu_open, mouse_pos, None)
+                        if close_rect and close_rect.collidepoint(mx, my):
+                            menu_open = False
+                            continue
+                        # 点击面板外关闭
+                        if panel_rect and not panel_rect.collidepoint(mx, my):
+                            menu_open = False
+                            continue
                     else:
                         dragging = True
-                        last_pos = event.pos
-                        velocity_x = 0.0
-                        velocity_y = 0.0
+                    last_pos = event.pos
+                    velocity['x'] = velocity['y'] = 0.0
                 elif event.button == 4:
-                    cam_distance = max(30, cam_distance - 3)
+                    cam['distance'] = max(30, cam['distance'] - 3)
                 elif event.button == 5:
-                    cam_distance = min(200, cam_distance + 3)
+                    cam['distance'] = min(200, cam['distance'] + 3)
 
             elif event.type == MOUSEBUTTONUP:
                 if event.button == 1:
                     dragging = False
 
             elif event.type == MOUSEMOTION:
-                if dragging:
+                mouse_pos = event.pos
+                if dragging and not menu_open:
                     dx = event.pos[0] - last_pos[0]
                     dy = event.pos[1] - last_pos[1]
-                    velocity_x = dx * 0.4
-                    velocity_y = -dy * 0.4
-                    cam_rot_y += velocity_x
-                    cam_rot_x += velocity_y
-                    cam_rot_x = max(-89, min(89, cam_rot_x))
+                    velocity['x'] = dx * 0.4
+                    velocity['y'] = -dy * 0.4
+                    cam['rot_y'] += velocity['x']
+                    cam['rot_x'] += velocity['y']
+                    cam['rot_x'] = max(-89, min(89, cam['rot_x']))
                     last_pos = event.pos
 
-        # 如果菜单打开，只绘制菜单
-        if main_menu.is_enabled() or help_menu.is_enabled() or about_menu.is_enabled():
-            # 先渲染 3D 场景作为背景
-            glClearColor(0.02, 0.02, 0.05, 1.0)
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-
-            glLoadIdentity()
-            glTranslatef(-cam_x, -cam_y, -cam_z)
-            glTranslatef(0, 0, cam_distance)
-            glRotatef(cam_rot_x, 1, 0, 0)
-            glRotatef(cam_rot_y, 0, 1, 0)
-
-            glPushMatrix()
-            glRotatef(-cam_rot_y, 0, 1, 0)
-            glRotatef(-cam_rot_x, 1, 0, 0)
-            draw_stars()
-            glPopMatrix()
-
-            draw_sun()
-
-            for name, orbit_radius, radius, period, color, angle in PLANETS_DATA:
-                draw_orbit(orbit_radius)
-                angular_velocity = 2 * math.pi / period
-                current_angle = angle + angular_velocity * t * speed
-                px = orbit_radius * math.cos(current_angle)
-                pz = orbit_radius * math.sin(current_angle)
-
-                glPushMatrix()
-                glTranslatef(px, 0, pz)
-                if name == "土星":
-                    glPushMatrix()
-                    glRotatef(25, 1, 0, 0)
-                    draw_saturn_ring(radius * 1.4, radius * 2.3)
-                    glPopMatrix()
-                draw_sphere(radius, color)
-                glPopMatrix()
-
-            # 绘制菜单覆盖层
-            if main_menu.is_enabled():
-                main_menu.draw(screen)
-            elif help_menu.is_enabled():
-                help_menu.draw(screen)
-            elif about_menu.is_enabled():
-                about_menu.draw(screen)
-
-            pygame.display.flip()
-            clock.tick(60)
-            continue
-
-        # 惯性滑动
-        if not dragging:
-            if abs(velocity_x) > 0.01 or abs(velocity_y) > 0.01:
-                cam_rot_y += velocity_x
-                cam_rot_x += velocity_y
-                cam_rot_x = max(-89, min(89, cam_rot_x))
-                velocity_x *= damping
-                velocity_y *= damping
-
-        # 键盘控制
+        # 相机控制
         keys = pygame.key.get_pressed()
-        if keys[K_UP]:
-            cam_distance = max(30, cam_distance - 1)
-        if keys[K_DOWN]:
-            cam_distance = min(200, cam_distance + 1)
-        if keys[K_a]:
-            cam_rot_y -= 1.5
-        if keys[K_d]:
-            cam_rot_y += 1.5
-        if keys[K_w]:
-            cam_rot_x += 1.5
-            cam_rot_x = max(-89, min(89, cam_rot_x))
-        if keys[K_s]:
-            cam_rot_x -= 1.5
-            cam_rot_x = max(-89, min(89, cam_rot_x))
+        process_camera(cam, keys, dragging, velocity, damping)
 
-        # 相机位置移动
-        move_speed = 1.0
-        rot_rad_x = math.radians(cam_rot_x)
-        rot_rad_y = math.radians(cam_rot_y)
-        if keys[K_i]:
-            cam_x += math.sin(rot_rad_y) * math.cos(rot_rad_x) * move_speed
-            cam_y -= math.sin(rot_rad_x) * move_speed
-            cam_z += math.cos(rot_rad_y) * math.cos(rot_rad_x) * move_speed
-        if keys[K_k]:
-            cam_x -= math.sin(rot_rad_y) * math.cos(rot_rad_x) * move_speed
-            cam_y += math.sin(rot_rad_x) * move_speed
-            cam_z -= math.cos(rot_rad_y) * math.cos(rot_rad_x) * move_speed
-        if keys[K_j]:
-            cam_x += math.cos(rot_rad_y) * move_speed
-            cam_z -= math.sin(rot_rad_y) * move_speed
-        if keys[K_l]:
-            cam_x -= math.cos(rot_rad_y) * move_speed
-            cam_z += math.sin(rot_rad_y) * move_speed
-        if keys[K_u]:
-            cam_y += move_speed
-        if keys[K_o]:
-            cam_y -= move_speed
+        # ---- 渲染 ----
+        draw_scene(cam, speed, t, paused)
 
-        glClearColor(0.02, 0.02, 0.05, 1.0)
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        # ---- 2D overlay（菜单）----
+        # 先绘制 OpenGL 到屏幕，然后用 pygame blit 覆盖
+        # 注意：OpenGL 和 pygame 渲染在同一个 surface 上
+        glFinish()
 
-        glLoadIdentity()
-        glTranslatef(-cam_x, -cam_y, -cam_z)
-        glTranslatef(0, 0, cam_distance)
-        glRotatef(cam_rot_x, 1, 0, 0)
-        glRotatef(cam_rot_y, 0, 1, 0)
+        # 菜单覆盖
+        btn_rect, close_rect, panel_rect = draw_menu_overlay(
+            screen, font, menu_open, mouse_pos, {'paused': paused, 'speed': speed})
 
-        glPushMatrix()
-        glRotatef(-cam_rot_y, 0, 1, 0)
-        glRotatef(-cam_rot_x, 1, 0, 0)
-        draw_stars()
-        glPopMatrix()
-
-        draw_sun()
-
-        for name, orbit_radius, radius, period, color, angle in PLANETS_DATA:
-            draw_orbit(orbit_radius)
-
-            angular_velocity = 2 * math.pi / period
-            current_angle = angle + angular_velocity * t * speed
-
-            px = orbit_radius * math.cos(current_angle)
-            pz = orbit_radius * math.sin(current_angle)
-
-            glPushMatrix()
-            glTranslatef(px, 0, pz)
-
-            if name == "土星":
-                glPushMatrix()
-                glRotatef(25, 1, 0, 0)
-                draw_saturn_ring(radius * 1.4, radius * 2.3)
-                glPopMatrix()
-
-            draw_sphere(radius, color)
-            glPopMatrix()
-
-        # 绘制顶部菜单按钮
+        # 状态栏文字（底部）
         status = "暂停" if paused else "运行中"
-        pygame.display.set_caption(
-            f'太阳系 3D 模拟 - {status} | 速度: {speed:.1f}x | '
-            f'拖动旋转 | 滚轮缩放 | A/D旋转 | W/S俯仰 | I/J/K/L移动 | U/O升降 | R重置 | M菜单 | 空格暂停 | ESC退出'
-        )
-
-        # 菜单按钮
-        btn_surf = pygame.Surface((menu_btn_rect.w, menu_btn_rect.h))
-        btn_surf.fill((40, 40, 80))
-        pygame.draw.rect(btn_surf, (100, 150, 200), btn_surf.get_rect(), 2)
-        font = pygame.font.SysFont("arial", 16)
-        text_surf = font.render("☰ 菜单", True, (220, 220, 220))
-        text_rect = text_surf.get_rect(center=menu_btn_rect.center)
-        screen.blit(btn_surf, menu_btn_rect.topleft)
-        screen.blit(text_surf, text_rect)
+        status_txt = font.render(
+            f'{status} | 速度: {speed:.1f}x | M-菜单 | 空格-暂停 | ESC-退出',
+            True, (180, 180, 200))
+        sw, sh = screen.get_size()
+        screen.blit(status_txt, (sw - status_txt.get_width() - 15, sh - 30))
 
         pygame.display.flip()
         clock.tick(60)
@@ -520,6 +506,5 @@ def main():
 
 if __name__ == '__main__':
     import os
-    # 抑制 macOS 输入法警告
     os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
     main()
