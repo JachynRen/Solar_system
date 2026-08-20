@@ -21,8 +21,8 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QOpenGLWidget, QMenuBar,
     QMenu, QAction, QMessageBox, QStatusBar, QLabel
 )
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QMouseEvent, QKeyEvent
+from PyQt5.QtCore import Qt, QTimer, QSurfaceFormat
+from PyQt5.QtGui import QMouseEvent, QKeyEvent, QSurface
 from OpenGL.GL import *
 from OpenGL.GLU import gluPerspective
 
@@ -486,6 +486,12 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    # macOS 需要使用 OpenGL compatibility profile，legacy glBegin/glEnd 在 core profile 下不可用
+    fmt = QSurfaceFormat.defaultFormat()
+    fmt.setProfile(QSurfaceFormat.CompatibilityProfile)
+    fmt.setVersion(2, 1)
+    QSurfaceFormat.setDefaultFormat(fmt)
+
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
