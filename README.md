@@ -4,7 +4,7 @@
 
 <p align="center">
   <b>作者</b>: JachynRen &nbsp;|&nbsp;
-  <b>邮箱</b>: jachynren@example.com &nbsp;|&nbsp;
+  <b>邮箱</b>: 784217755@qq.com &nbsp;|&nbsp;
   <b>GitHub</b>: <a href="https://github.com/JachynRen/Solar_system">Solar_system</a>
 </p>
 
