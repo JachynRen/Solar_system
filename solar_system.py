@@ -26,7 +26,7 @@ import sys
 # 作者信息
 VERSION = "1.0.0"
 AUTHOR_NAME = "JachynRen"
-AUTHOR_EMAIL = "jachynren@example.com"
+AUTHOR_EMAIL = "784217755@qq.com"
 GITHUB_URL = "https://github.com/JachynRen/Solar_system"
 
 # 行星数据：(名称, 轨道半径, 半径, 公转周期(天), 颜色RGB, 初始角度)
