@@ -583,7 +583,12 @@ def main():
     mouse_pos = (0, 0)
     font = pygame.font.SysFont("arial", FONT_SIZE)
 
+    # 存储每帧的菜单 rect（用于事件检测）
+    menu_rects = {}
+    popup_close_rect = None
+
     while running:
+        # ---- 先处理事件 ----
         events = pygame.event.get()
         for event in events:
             if event.type == QUIT:
@@ -616,19 +621,14 @@ def main():
                     handled = False
 
                     # 1) 关闭弹窗按钮
-                    if popup_mode:
-                        close_rect, panel_rect = draw_help_about_overlay(
-                            screen, font, mouse_pos, popup_mode)
-                        if close_rect.collidepoint(mx, my):
+                    if popup_mode and popup_close_rect:
+                        if popup_close_rect.collidepoint(mx, my):
                             popup_mode = None
                             handled = True
 
                     if not handled:
                         # 2) 菜单栏点击
-                        rects = draw_menubar_overlay(
-                            screen, font, mouse_pos, menu_state,
-                            {'paused': paused, 'speed': speed})
-                        item_rects = rects.get("menu_items", {})
+                        item_rects = menu_rects.get("menu_items", {})
 
                         # 检查是否点击菜单标题
                         for mname, mrect in item_rects.items():
@@ -642,7 +642,7 @@ def main():
 
                         # 检查是否点击下拉菜单项
                         if not handled:
-                            for key, val in rects.items():
+                            for key, val in menu_rects.items():
                                 if not key.startswith("item_"):
                                     continue
                                 action, ir = val
@@ -716,13 +716,15 @@ def main():
         draw_scene(cam, speed, t, paused)
 
         # ---- 2D overlay ----
-        # 顶部菜单栏 + 下拉菜单
-        rects = draw_menubar_overlay(font, mouse_pos, menu_state,
-                                     {'paused': paused, 'speed': speed})
+        # 顶部菜单栏 + 下拉菜单（保存 rect 供下一帧事件检测用）
+        menu_rects = draw_menubar_overlay(font, mouse_pos, menu_state,
+                                          {'paused': paused, 'speed': speed})
 
         # 帮助/关于弹窗
         if popup_mode:
-            draw_help_about_overlay(font, mouse_pos, popup_mode)
+            popup_close_rect, _ = draw_help_about_overlay(font, mouse_pos, popup_mode)
+        else:
+            popup_close_rect = None
 
         pygame.display.flip()
         clock.tick(60)
