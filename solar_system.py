@@ -188,6 +188,34 @@ ABOUT_LINES = [
 FONT_SIZE = 16
 LINE_H = 24
 MENU_PAD = 15
+
+# 顶部菜单栏
+MENUBAR_H = 26
+MENUBAR_BG = (50, 50, 70)
+MENUBAR_TEXT = (220, 220, 230)
+MENUBAR_HOVER = (80, 80, 130)
+
+# 菜单定义
+MENU_ITEMS = {
+    "文件": [
+        ("重置视角", "reset_camera"),
+        ("退出", "quit"),
+    ],
+    "视图": [
+        ("默认视角", "view_default"),
+        ("俯视", "view_top"),
+        ("侧视", "view_side"),
+    ],
+    "模拟": [
+        ("暂停/继续", "toggle_pause"),
+        ("加速", "speed_up"),
+        ("减速", "speed_down"),
+    ],
+    "帮助": [
+        ("操作说明", "show_help"),
+        ("关于", "show_about"),
+    ],
+}
 MENU_BG = (25, 25, 45)
 MENU_BORDER = (80, 120, 180)
 MENU_TEXT = (220, 220, 230)
@@ -210,72 +238,128 @@ def _render_text(font, text, color):
     return font.render(text, True, color)
 
 
-def draw_menu_overlay(surf, font, menu_open, mouse_pos, game_state):
-    """绘制菜单覆盖层（pygame 2D 渲染，在 flip 之前）"""
+def draw_menubar_overlay(surf, font, mouse_pos, menu_state, game_state):
+    """
+    绘制顶部菜单栏 + 下拉菜单。
+    menu_state: dict with keys:
+        open_menu: str | None  — which menu dropdown is open
+    game_state: dict with simulation state
+    Returns dict of clickable rects.
+    """
+    width, height = surf.get_size()
+    rects = {}
+
+    # ---- 菜单栏背景 ----
+    bar_rect = pygame.Rect(0, 0, width, MENUBAR_H)
+    _draw_filled_rect(surf, bar_rect, MENUBAR_BG)
+
+    # ---- 计算每个菜单项的位置 ----
+    menu_names = list(MENU_ITEMS.keys())
+    x = 10
+    item_rects = {}
+    for name in menu_names:
+        txt_surf = _render_text(font, name, MENUBAR_TEXT)
+        w = txt_surf.get_width() + 16
+        r = pygame.Rect(x, 0, w, MENUBAR_H)
+        item_rects[name] = r
+        hovered = r.collidepoint(mouse_pos)
+        if hovered:
+            _draw_filled_rect(surf, r, MENUBAR_HOVER)
+        surf.blit(txt_surf, (x + 8, 5))
+        x += w + 2
+
+    # ---- 下拉菜单 ----
+    open_name = menu_state.get("open_menu")
+    if open_name and open_name in item_rects:
+        parent_rect = item_rects[open_name]
+        items = MENU_ITEMS[open_name]
+
+        # 计算下拉面板尺寸
+        max_w = 0
+        for label, _ in items:
+            tw = font.size(label)[0]
+            if tw > max_w:
+                max_w = tw
+        drop_w = max_w + 30
+        drop_h = len(items) * 28 + 8
+        drop_x = parent_rect.x
+        drop_y = MENUBAR_H
+        drop_rect = pygame.Rect(drop_x, drop_y, drop_w, drop_h)
+
+        # 面板
+        _draw_filled_rect(surf, drop_rect, MENU_BG)
+        _draw_rect_border(surf, drop_rect, MENU_BORDER)
+
+        # 菜单项
+        for idx, (label, action) in enumerate(items):
+            iy = drop_y + 4 + idx * 28
+            ir = pygame.Rect(drop_x + 4, iy, drop_w - 8, 24)
+            rects[f"item_{open_name}_{idx}"] = (action, ir)
+            h = ir.collidepoint(mouse_pos)
+            if h:
+                _draw_filled_rect(surf, ir, (50, 50, 100))
+            txt = _render_text(font, label, MENU_TEXT if not h else (255, 255, 255))
+            surf.blit(txt, (drop_x + 12, iy + 3))
+
+    rects["menubar"] = bar_rect
+    rects["menu_items"] = item_rects
+    return rects
+
+
+def draw_help_about_overlay(surf, font, mouse_pos, mode):
+    """绘制帮助/关于弹窗覆盖层。mode='help' 或 'about'。返回关闭按钮 rect。"""
     width, height = surf.get_size()
 
-    # ---- 菜单按钮 ----
-    btn_w, btn_h = 80, 32
-    btn_rect = pygame.Rect(12, 10, btn_w, btn_h)
-    hovered = btn_rect.collidepoint(mouse_pos)
-    _draw_filled_rect(surf, btn_rect, BTN_HOVER if hovered else BTN_BG)
-    _draw_rect_border(surf, btn_rect, BTN_BORDER)
-    txt = _render_text(font, "☰ 菜单", BTN_TEXT)
-    surf.blit(txt, txt.get_rect(center=btn_rect.center))
+    if mode == "help":
+        lines = HELP_LINES
+    else:
+        lines = ABOUT_LINES
 
-    # ---- 弹窗 ----
-    if menu_open:
-        # 计算弹窗尺寸
-        lines = HELP_LINES + ["", "---"] + ABOUT_LINES
-        max_char_w = max(font.size(line)[0] for line in lines)
-        panel_w = max_char_w + MENU_PAD * 2
-        panel_h = len(lines) * LINE_H + MENU_PAD * 2 + 40  # 额外给关闭按钮留空间
-        panel_x = (width - panel_w) // 2
-        panel_y = (height - panel_h) // 2
-        panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+    max_char_w = max(font.size(line)[0] for line in lines)
+    panel_w = max_char_w + MENU_PAD * 2
+    panel_h = len(lines) * LINE_H + MENU_PAD * 2 + 40
+    panel_x = (width - panel_w) // 2
+    panel_y = MENUBAR_H + 20
+    panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
 
-        # 半透明背景遮罩
-        overlay = pygame.Surface((width, height), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 120))
-        surf.blit(overlay, (0, 0))
+    # 遮罩
+    overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 120))
+    surf.blit(overlay, (0, 0))
 
-        # 面板背景
-        _draw_filled_rect(surf, panel_rect, MENU_BG)
-        _draw_rect_border(surf, panel_rect, MENU_BORDER)
+    _draw_filled_rect(surf, panel_rect, MENU_BG)
+    _draw_rect_border(surf, panel_rect, MENU_BORDER)
 
-        # 标题
-        title = _render_text(font, f"菜单 v{VERSION}", MENU_TITLE)
-        surf.blit(title, (panel_x + MENU_PAD, panel_y + MENU_PAD))
+    title_label = "操作说明" if mode == "help" else f"关于 v{VERSION}"
+    title = _render_text(font, title_label, MENU_TITLE)
+    surf.blit(title, (panel_x + MENU_PAD, panel_y + MENU_PAD))
 
-        # 内容行
-        y = panel_y + MENU_PAD + LINE_H + 5
-        for line in lines:
-            if line.startswith("===") or line.startswith("太阳系"):
-                c = MENU_TITLE
-            elif line.startswith("---"):
-                c = (100, 100, 130)
-            elif line.startswith("作者") or line.startswith("邮箱") or line.startswith("GitHub"):
-                c = (150, 180, 220)
-            else:
-                c = MENU_TEXT
-            txt_surf = _render_text(font, line, c)
-            surf.blit(txt_surf, (panel_x + MENU_PAD, y))
-            y += LINE_H
+    y = panel_y + MENU_PAD + LINE_H + 5
+    for line in lines:
+        if line.startswith("==="):
+            c = MENU_TITLE
+        elif line.startswith("---"):
+            c = (100, 100, 130)
+        elif line.startswith("作者") or line.startswith("邮箱") or line.startswith("GitHub"):
+            c = (150, 180, 220)
+        else:
+            c = MENU_TEXT
+        txt_surf = _render_text(font, line, c)
+        surf.blit(txt_surf, (panel_x + MENU_PAD, y))
+        y += LINE_H
 
-        # 关闭按钮
-        close_w, close_h = 80, 28
-        close_rect = pygame.Rect(panel_x + (panel_w - close_w) // 2,
-                                 panel_y + panel_h - close_h - 12,
-                                 close_w, close_h)
-        close_hovered = close_rect.collidepoint(mouse_pos)
-        _draw_filled_rect(surf, close_rect, BTN_HOVER if close_hovered else BTN_BG)
-        _draw_rect_border(surf, close_rect, BTN_BORDER)
-        close_txt = _render_text(font, "关闭", BTN_TEXT)
-        surf.blit(close_txt, close_txt.get_rect(center=close_rect.center))
+    # 关闭按钮
+    close_w, close_h = 70, 26
+    close_rect = pygame.Rect(panel_x + (panel_w - close_w) // 2,
+                             panel_y + panel_h - close_h - 10,
+                             close_w, close_h)
+    ch = close_rect.collidepoint(mouse_pos)
+    _draw_filled_rect(surf, close_rect, BTN_HOVER if ch else BTN_BG)
+    _draw_rect_border(surf, close_rect, BTN_BORDER)
+    ct = _render_text(font, "关闭", BTN_TEXT)
+    surf.blit(ct, ct.get_rect(center=close_rect.center))
 
-        return btn_rect, close_rect, panel_rect
-
-    return btn_rect, None, None
+    return close_rect, panel_rect
 
 
 def draw_scene(cam, speed, t, paused):
@@ -407,7 +491,8 @@ def main():
     velocity = {'x': 0.0, 'y': 0.0}
     damping = 0.92
 
-    menu_open = False
+    menu_state = {"open_menu": None}  # 顶部菜单状态
+    popup_mode = None  # 'help' 或 'about' 弹窗模式
     mouse_pos = (0, 0)
     font = pygame.font.SysFont("arial", FONT_SIZE)
 
@@ -436,23 +521,80 @@ def main():
                     cam['rot_y'] += 45
                     cam['distance'] = 70
                 elif event.key == K_m:
-                    menu_open = not menu_open
+                    popup_mode = "help" if popup_mode != "help" else None
 
             elif event.type == MOUSEBUTTONDOWN:
                 if event.button == 1:
                     mx, my = event.pos
-                    if menu_open:
-                        btn_rect, close_rect, panel_rect = draw_menu_overlay(
-                            screen, font, menu_open, mouse_pos, None)
-                        if close_rect and close_rect.collidepoint(mx, my):
-                            menu_open = False
-                            continue
-                        # 点击面板外关闭
-                        if panel_rect and not panel_rect.collidepoint(mx, my):
-                            menu_open = False
-                            continue
-                    else:
-                        dragging = True
+                    handled = False
+
+                    # 1) 关闭弹窗按钮
+                    if popup_mode:
+                        close_rect, panel_rect = draw_help_about_overlay(
+                            screen, font, mouse_pos, popup_mode)
+                        if close_rect.collidepoint(mx, my):
+                            popup_mode = None
+                            handled = True
+
+                    if not handled:
+                        # 2) 菜单栏点击
+                        rects = draw_menubar_overlay(
+                            screen, font, mouse_pos, menu_state,
+                            {'paused': paused, 'speed': speed})
+                        item_rects = rects.get("menu_items", {})
+
+                        # 检查是否点击菜单标题
+                        for mname, mrect in item_rects.items():
+                            if mrect.collidepoint(mx, my):
+                                if menu_state["open_menu"] == mname:
+                                    menu_state["open_menu"] = None
+                                else:
+                                    menu_state["open_menu"] = mname
+                                handled = True
+                                break
+
+                        # 检查是否点击下拉菜单项
+                        if not handled:
+                            for key, (action, ir) in rects.items():
+                                if key.startswith("item_") and ir.collidepoint(mx, my):
+                                    if action == "quit":
+                                        running = False
+                                    elif action == "reset_camera":
+                                        cam['rot_x'] = -25; cam['rot_y'] = 0
+                                        cam['distance'] = 90
+                                        cam['x'] = cam['y'] = cam['z'] = 0.0
+                                    elif action == "view_default":
+                                        cam['rot_x'] = -25; cam['rot_y'] = 0
+                                        cam['distance'] = 90
+                                        cam['x'] = cam['y'] = cam['z'] = 0.0
+                                    elif action == "view_top":
+                                        cam['rot_x'] = -80; cam['rot_y'] = 0
+                                        cam['distance'] = 120
+                                        cam['x'] = cam['y'] = cam['z'] = 0.0
+                                    elif action == "view_side":
+                                        cam['rot_x'] = -5; cam['rot_y'] = 0
+                                        cam['distance'] = 100
+                                        cam['x'] = cam['y'] = cam['z'] = 0.0
+                                    elif action == "toggle_pause":
+                                        paused = not paused
+                                    elif action == "speed_up":
+                                        speed = min(10.0, speed + 0.5)
+                                    elif action == "speed_down":
+                                        speed = max(0.1, speed - 0.5)
+                                    elif action == "show_help":
+                                        popup_mode = "help"
+                                        menu_state["open_menu"] = None
+                                    elif action == "show_about":
+                                        popup_mode = "about"
+                                        menu_state["open_menu"] = None
+                                    handled = True
+                                    break
+
+                        # 3) 点击空白关闭菜单
+                        if not handled:
+                            menu_state["open_menu"] = None
+                            dragging = True
+
                     last_pos = event.pos
                     velocity['x'] = velocity['y'] = 0.0
                 elif event.button == 4:
@@ -466,7 +608,7 @@ def main():
 
             elif event.type == MOUSEMOTION:
                 mouse_pos = event.pos
-                if dragging and not menu_open:
+                if dragging and not popup_mode and not menu_state.get("open_menu"):
                     dx = event.pos[0] - last_pos[0]
                     dy = event.pos[1] - last_pos[1]
                     velocity['x'] = dx * 0.4
@@ -483,19 +625,21 @@ def main():
         # ---- 渲染 ----
         draw_scene(cam, speed, t, paused)
 
-        # ---- 2D overlay（菜单）----
-        # 先绘制 OpenGL 到屏幕，然后用 pygame blit 覆盖
-        # 注意：OpenGL 和 pygame 渲染在同一个 surface 上
+        # ---- 2D overlay ----
         glFinish()
 
-        # 菜单覆盖
-        btn_rect, close_rect, panel_rect = draw_menu_overlay(
-            screen, font, menu_open, mouse_pos, {'paused': paused, 'speed': speed})
+        # 顶部菜单栏 + 下拉菜单
+        draw_menubar_overlay(screen, font, mouse_pos, menu_state,
+                            {'paused': paused, 'speed': speed})
 
-        # 状态栏文字（底部）
+        # 帮助/关于弹窗
+        if popup_mode:
+            draw_help_about_overlay(screen, font, mouse_pos, popup_mode)
+
+        # 底部状态栏
         status = "暂停" if paused else "运行中"
         status_txt = font.render(
-            f'{status} | 速度: {speed:.1f}x | M-菜单 | 空格-暂停 | ESC-退出',
+            f'{status} | 速度: {speed:.1f}x | M-帮助 | 空格-暂停 | ESC-退出',
             True, (180, 180, 200))
         sw, sh = screen.get_size()
         screen.blit(status_txt, (sw - status_txt.get_width() - 15, sh - 30))
