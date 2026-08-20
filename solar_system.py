@@ -444,10 +444,10 @@ def _gl_blit_text(txt_surf, x, y, screen_w, screen_h):
 
     glColor4f(1, 1, 1, 1)
     glBegin(GL_QUADS)
-    glTexCoord2f(0, 0); glVertex2f(x, y)
-    glTexCoord2f(1, 0); glVertex2f(x + tw, y)
-    glTexCoord2f(1, 1); glVertex2f(x + tw, y + th)
-    glTexCoord2f(0, 1); glVertex2f(x, y + th)
+    glTexCoord2f(0, 1); glVertex2f(x, y)
+    glTexCoord2f(1, 1); glVertex2f(x + tw, y)
+    glTexCoord2f(1, 0); glVertex2f(x + tw, y + th)
+    glTexCoord2f(0, 0); glVertex2f(x, y + th)
     glEnd()
 
     glDeleteTextures([tex])
