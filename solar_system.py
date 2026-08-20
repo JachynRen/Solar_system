@@ -1,10 +1,10 @@
 """
 太阳系 3D 模拟程序
-使用 PyQt5 + OpenGL 展示太阳系八大行星的运动轨迹
+使用 Pygame + OpenGL 展示太阳系八大行星的运动轨迹
 
 操作方式：
-- 鼠标左键拖动：旋转视角
-- 鼠标滚轮：缩放
+- 触控板单指拖动 / 鼠标左键拖动：旋转视角
+- 触控板双指捏合 / 鼠标滚轮 / 上下方向键：缩放
 - I/J/K/L 键：相机前后左右移动（基于当前朝向）
 - U/O 键：相机上/下移动
 - 空格键：暂停/继续
@@ -12,19 +12,16 @@
 - A/D 键：水平旋转
 - W/S 键：垂直旋转
 - R 键：重置视角
+- H 键：帮助
 - ESC：退出
 """
 
-import sys
-import math
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QOpenGLWidget, QMenuBar,
-    QMenu, QAction, QMessageBox, QStatusBar, QLabel
-)
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QMouseEvent, QKeyEvent, QSurfaceFormat
+import pygame
+from pygame.locals import *
 from OpenGL.GL import *
-from OpenGL.GLU import gluPerspective
+from OpenGL.GLU import *
+import math
+import sys
 
 # 作者信息
 AUTHOR_NAME = "JachynRen"
@@ -42,6 +39,40 @@ PLANETS_DATA = [
     ("天王星", 55, 0.9, 30687, (0.5, 0.85, 0.95), 3 * math.pi / 2),
     ("海王星", 68, 0.85, 60190, (0.2, 0.3, 0.9), 7 * math.pi / 4),
 ]
+
+# 菜单相关常量
+HELP_TEXT = [
+    "=== 操作说明 ===",
+    "",
+    "鼠标 / 触控板：",
+    "  左键拖动 / 单指拖动 - 旋转视角",
+    "  滚轮 / 双指捏合     - 缩放",
+    "",
+    "键盘：",
+    "  W/S        - 俯仰旋转（上/下看）",
+    "  A/D        - 水平旋转（左/右转）",
+    "  I/J/K/L    - 相机前后左右移动",
+    "  U/O        - 相机上/下移动",
+    "  ↑/↓        - 缩放",
+    "  +/-        - 调整模拟速度",
+    "  空格       - 暂停/继续",
+    "  R          - 重置视角",
+    "  F          - 快速视角切换",
+    "  H          - 显示/隐藏帮助",
+    "  ESC        - 退出",
+]
+
+ABOUT_TEXT = [
+    "太阳系 3D 模拟程序",
+    "",
+    f"作者: {AUTHOR_NAME}",
+    f"邮箱: {AUTHOR_EMAIL}",
+    f"GitHub: {GITHUB_URL}",
+]
+
+MENU_BAR_HEIGHT = 28
+MENU_DROPDOWN_WIDTH = 220
+MENU_ITEM_HEIGHT = 26
 
 
 def draw_sphere(radius, color, slices=32, stacks=32):
@@ -160,92 +191,288 @@ def draw_stars():
     glEnable(GL_LIGHTING)
 
 
-class SolarSystemGLWidget(QOpenGLWidget):
-    """OpenGL 渲染窗口"""
+# ========== 2D UI 绘制函数 ==========
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.parent_window = parent
+def draw_rect_2d(x, y, w, h):
+    """绘制2D矩形（填充）"""
+    glBegin(GL_QUADS)
+    glVertex2f(x, y)
+    glVertex2f(x + w, y)
+    glVertex2f(x + w, y + h)
+    glVertex2f(x, y + h)
+    glEnd()
 
-        # macOS 兼容 OpenGL profile
-        fmt = QSurfaceFormat()
-        fmt.setVersion(2, 1)
-        fmt.setProfile(QSurfaceFormat.CompatibilityProfile)
-        fmt.setSwapBehavior(QSurfaceFormat.DoubleBuffer)
-        self.setFormat(fmt)
 
-        # 相机参数
-        self.cam_rot_x = -25
-        self.cam_rot_y = 0
-        self.cam_distance = 90
-        self.cam_x = 0.0
-        self.cam_y = 0.0
-        self.cam_z = 0.0
+def draw_rect_border_2d(x, y, w, h):
+    """绘制2D矩形边框"""
+    glBegin(GL_LINE_LOOP)
+    glVertex2f(x, y)
+    glVertex2f(x + w, y)
+    glVertex2f(x + w, y + h)
+    glVertex2f(x, y + h)
+    glEnd()
 
-        # 模拟状态
-        self.speed = 1.0
-        self.t = 0
-        self.paused = False
 
-        # 鼠标拖动状态
-        self.dragging = False
-        self.last_pos = (0, 0)
+def draw_text_2d(font, text, x, y, color=(220, 220, 220)):
+    """绘制2D文字"""
+    surf = font.render(text, True, color)
+    pygame.display.get_surface().blit(surf, (x, y))
 
-        # 惯性滑动参数
-        self.velocity_x = 0.0
-        self.velocity_y = 0.0
-        self.damping = 0.92
 
-        # 按键状态
-        self.keys_pressed = set()
+def draw_dropdown_panel(font, lines, x, y, width):
+    """绘制下拉面板"""
+    panel_height = len(lines) * MENU_ITEM_HEIGHT + 10
+    max_h = pygame.display.get_surface().get_height()
+    actual_height = min(panel_height, max_h - y - 5)
 
-        # 定时器
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.update_scene)
-        self.timer.start(16)  # ~60 FPS
+    # 面板背景
+    glColor4f(0.12, 0.12, 0.18, 0.95)
+    draw_rect_2d(x, y, width, actual_height)
 
-    def initializeGL(self):
-        """初始化 OpenGL"""
-        glEnable(GL_LIGHTING)
-        glEnable(GL_LIGHT0)
-        glEnable(GL_LIGHT1)
-        glEnable(GL_DEPTH_TEST)
-        glEnable(GL_COLOR_MATERIAL)
-        glEnable(GL_NORMALIZE)
+    # 边框
+    glColor4f(0.4, 0.4, 0.5, 1.0)
+    draw_rect_border_2d(x, y, width, actual_height)
 
-        glLightfv(GL_LIGHT0, GL_POSITION, [0.0, 0.0, 0.0, 1.0])
-        glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 0.9, 1.0])
-        glLightfv(GL_LIGHT0, GL_AMBIENT, [0.3, 0.3, 0.2, 1.0])
+    # 文本
+    for idx, line in enumerate(lines):
+        color = (180, 180, 200) if not line.startswith("===") else (255, 200, 80)
+        draw_text_2d(font, line, x + 8, y + 5 + idx * MENU_ITEM_HEIGHT, color)
 
-        glLightfv(GL_LIGHT1, GL_POSITION, [50.0, 50.0, 50.0, 0.0])
-        glLightfv(GL_LIGHT1, GL_DIFFUSE, [0.2, 0.2, 0.3, 1.0])
+
+def draw_menu_bar_2d(font, menu_open, mouse_pos):
+    """绘制顶部菜单栏和下拉菜单（2D overlay）"""
+    glDisable(GL_DEPTH_TEST)
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+    gluOrtho2D(0, pygame.display.get_surface().get_width(),
+               pygame.display.get_surface().get_height(), 0)
+    glMatrixMode(GL_MODELVIEW)
+    glPushMatrix()
+    glLoadIdentity()
+    glDisable(GL_LIGHTING)
+
+    screen_w = pygame.display.get_surface().get_width()
+
+    # 菜单栏背景
+    glColor4f(0.15, 0.15, 0.2, 0.95)
+    draw_rect_2d(0, 0, screen_w, MENU_BAR_HEIGHT)
+
+    # 菜单项文字宽度
+    help_surf = font.render("帮助", True, (200, 200, 200))
+    about_surf = font.render("关于", True, (200, 200, 200))
+    item_w = help_surf.get_width() + 20
+    about_x = item_w + 5
+    about_w = about_surf.get_width() + 20
+
+    # 绘制"帮助"
+    help_hover = (0 <= mouse_pos[0] <= item_w and 0 <= mouse_pos[1] <= MENU_BAR_HEIGHT) if mouse_pos else False
+    help_color = (70, 180, 220) if help_hover else (220, 220, 220)
+    draw_text_2d(font, "帮助", 15, 5, help_color)
+
+    # 绘制"关于"
+    about_hover = (about_x <= mouse_pos[0] <= about_x + about_w and 0 <= mouse_pos[1] <= MENU_BAR_HEIGHT) if mouse_pos else False
+    about_color = (70, 180, 220) if about_hover else (220, 220, 220)
+    draw_text_2d(font, "关于", about_x + 10, 5, about_color)
+
+    # 绘制下拉菜单
+    if menu_open == "help":
+        draw_dropdown_panel(font, HELP_TEXT, 5, MENU_BAR_HEIGHT, MENU_DROPDOWN_WIDTH)
+    elif menu_open == "about":
+        draw_dropdown_panel(font, ABOUT_TEXT, about_x, MENU_BAR_HEIGHT, MENU_DROPDOWN_WIDTH)
+
+    glEnable(GL_LIGHTING)
+    glMatrixMode(GL_MODELVIEW)
+    glPopMatrix()
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
+    glEnable(GL_DEPTH_TEST)
+
+
+def main():
+    pygame.init()
+
+    width, height = 1200, 800
+    pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL | RESIZABLE)
+    pygame.display.set_caption('太阳系 3D 模拟')
+
+    # 启用光照
+    glEnable(GL_LIGHTING)
+    glEnable(GL_LIGHT0)
+    glEnable(GL_LIGHT1)
+    glEnable(GL_DEPTH_TEST)
+    glEnable(GL_COLOR_MATERIAL)
+    glEnable(GL_NORMALIZE)
+
+    glLightfv(GL_LIGHT0, GL_POSITION, [0.0, 0.0, 0.0, 1.0])
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 0.9, 1.0])
+    glLightfv(GL_LIGHT0, GL_AMBIENT, [0.3, 0.3, 0.2, 1.0])
+
+    glLightfv(GL_LIGHT1, GL_POSITION, [50.0, 50.0, 50.0, 0.0])
+    glLightfv(GL_LIGHT1, GL_DIFFUSE, [0.2, 0.2, 0.3, 1.0])
+
+    glMatrixMode(GL_PROJECTION)
+    gluPerspective(60, width / height, 0.1, 500.0)
+    glMatrixMode(GL_MODELVIEW)
+
+    # 相机参数
+    cam_rot_x = -25
+    cam_rot_y = 0
+    cam_distance = 90
+    cam_x = 0.0
+    cam_y = 0.0
+    cam_z = 0.0
+
+    clock = pygame.time.Clock()
+    running = True
+    speed = 1.0
+    t = 0
+    paused = False
+
+    # 拖动状态
+    dragging = False
+    last_pos = (0, 0)
+
+    # 惯性滑动参数
+    velocity_x = 0.0
+    velocity_y = 0.0
+    damping = 0.92
+
+    # 菜单状态
+    menu_open = None  # "help", "about", or None
+    mouse_pos = (0, 0)
+    font = pygame.font.SysFont("arial", 14)
+
+    while running:
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                running = False
+
+            elif event.type == KEYDOWN:
+                if event.key == K_ESCAPE:
+                    running = False
+                elif event.key == K_SPACE:
+                    paused = not paused
+                elif event.key == K_PLUS or event.key == K_EQUALS:
+                    speed = min(10.0, speed + 0.5)
+                elif event.key == K_MINUS or event.key == K_UNDERSCORE:
+                    speed = max(0.1, speed - 0.5)
+                elif event.key == K_r:
+                    cam_rot_x = -25
+                    cam_rot_y = 0
+                    cam_distance = 90
+                    cam_x = 0.0
+                    cam_y = 0.0
+                    cam_z = 0.0
+                elif event.key == K_f:
+                    cam_rot_x = -45
+                    cam_rot_y = cam_rot_y + 45
+                    cam_distance = 70
+                elif event.key == K_h:
+                    menu_open = "help" if menu_open != "help" else None
+
+            elif event.type == MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    mx, my = event.pos
+                    if my <= MENU_BAR_HEIGHT:
+                        help_surf = font.render("帮助", True, (200, 200, 200))
+                        item_w = help_surf.get_width() + 20
+                        if mx <= item_w:
+                            menu_open = "help" if menu_open != "help" else None
+                        else:
+                            about_x = item_w + 5
+                            about_w = help_surf.get_width() + 20
+                            if about_x <= mx <= about_x + about_w:
+                                menu_open = "about" if menu_open != "about" else None
+                    else:
+                        menu_open = None
+                        dragging = True
+                    last_pos = event.pos
+                    velocity_x = 0.0
+                    velocity_y = 0.0
+                elif event.button == 4:
+                    cam_distance = max(30, cam_distance - 3)
+                elif event.button == 5:
+                    cam_distance = min(200, cam_distance + 3)
+
+            elif event.type == MOUSEBUTTONUP:
+                if event.button == 1:
+                    dragging = False
+
+            elif event.type == MOUSEMOTION:
+                mouse_pos = event.pos
+                if dragging:
+                    dx = event.pos[0] - last_pos[0]
+                    dy = event.pos[1] - last_pos[1]
+                    velocity_x = dx * 0.4
+                    velocity_y = -dy * 0.4
+                    cam_rot_y += velocity_x
+                    cam_rot_x += velocity_y
+                    cam_rot_x = max(-89, min(89, cam_rot_x))
+                    last_pos = event.pos
+
+        # 惯性滑动
+        if not dragging:
+            if abs(velocity_x) > 0.01 or abs(velocity_y) > 0.01:
+                cam_rot_y += velocity_x
+                cam_rot_x += velocity_y
+                cam_rot_x = max(-89, min(89, cam_rot_x))
+                velocity_x *= damping
+                velocity_y *= damping
+
+        # 键盘控制
+        keys = pygame.key.get_pressed()
+        if keys[K_UP]:
+            cam_distance = max(30, cam_distance - 1)
+        if keys[K_DOWN]:
+            cam_distance = min(200, cam_distance + 1)
+        if keys[K_a]:
+            cam_rot_y -= 1.5
+        if keys[K_d]:
+            cam_rot_y += 1.5
+        if keys[K_w]:
+            cam_rot_x += 1.5
+            cam_rot_x = max(-89, min(89, cam_rot_x))
+        if keys[K_s]:
+            cam_rot_x -= 1.5
+            cam_rot_x = max(-89, min(89, cam_rot_x))
+
+        # 相机位置移动
+        move_speed = 1.0
+        rot_rad_x = math.radians(cam_rot_x)
+        rot_rad_y = math.radians(cam_rot_y)
+        if keys[K_i]:
+            cam_x += math.sin(rot_rad_y) * math.cos(rot_rad_x) * move_speed
+            cam_y -= math.sin(rot_rad_x) * move_speed
+            cam_z += math.cos(rot_rad_y) * math.cos(rot_rad_x) * move_speed
+        if keys[K_k]:
+            cam_x -= math.sin(rot_rad_y) * math.cos(rot_rad_x) * move_speed
+            cam_y += math.sin(rot_rad_x) * move_speed
+            cam_z -= math.cos(rot_rad_y) * math.cos(rot_rad_x) * move_speed
+        if keys[K_j]:
+            cam_x += math.cos(rot_rad_y) * move_speed
+            cam_z -= math.sin(rot_rad_y) * move_speed
+        if keys[K_l]:
+            cam_x -= math.cos(rot_rad_y) * move_speed
+            cam_z += math.sin(rot_rad_y) * move_speed
+        if keys[K_u]:
+            cam_y += move_speed
+        if keys[K_o]:
+            cam_y -= move_speed
 
         glClearColor(0.02, 0.02, 0.05, 1.0)
-
-    def resizeGL(self, width, height):
-        """窗口大小变化时调用"""
-        if height == 0:
-            height = 1
-        glViewport(0, 0, width, height)
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        gluPerspective(60, width / height, 0.1, 500.0)
-        glMatrixMode(GL_MODELVIEW)
-
-    def paintGL(self):
-        """渲染场景"""
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
-        glTranslatef(-self.cam_x, -self.cam_y, -self.cam_z)
-        glTranslatef(0, 0, self.cam_distance)
-        glRotatef(self.cam_rot_x, 1, 0, 0)
-        glRotatef(self.cam_rot_y, 0, 1, 0)
+        glTranslatef(-cam_x, -cam_y, -cam_z)
+        glTranslatef(0, 0, cam_distance)
+        glRotatef(cam_rot_x, 1, 0, 0)
+        glRotatef(cam_rot_y, 0, 1, 0)
 
         glPushMatrix()
-        glRotatef(-self.cam_rot_y, 0, 1, 0)
-        glRotatef(-self.cam_rot_x, 1, 0, 0)
+        glRotatef(-cam_rot_y, 0, 1, 0)
+        glRotatef(-cam_rot_x, 1, 0, 0)
         draw_stars()
         glPopMatrix()
 
@@ -255,7 +482,7 @@ class SolarSystemGLWidget(QOpenGLWidget):
             draw_orbit(orbit_radius)
 
             angular_velocity = 2 * math.pi / period
-            current_angle = angle + angular_velocity * self.t * self.speed
+            current_angle = angle + angular_velocity * t * speed
 
             px = orbit_radius * math.cos(current_angle)
             pz = orbit_radius * math.sin(current_angle)
@@ -272,238 +499,23 @@ class SolarSystemGLWidget(QOpenGLWidget):
             draw_sphere(radius, color)
             glPopMatrix()
 
-    def update_scene(self):
-        """更新模拟状态"""
-        # 处理持续按下的按键
-        self.process_keys()
-
-        # 惯性滑动
-        if not self.dragging:
-            if abs(self.velocity_x) > 0.01 or abs(self.velocity_y) > 0.01:
-                self.cam_rot_y += self.velocity_x
-                self.cam_rot_x += self.velocity_y
-                self.cam_rot_x = max(-89, min(89, self.cam_rot_x))
-                self.velocity_x *= self.damping
-                self.velocity_y *= self.damping
-
-        # 更新状态栏
-        if self.parent_window:
-            self.parent_window.update_status_bar()
-
-        if not self.paused:
-            self.t += 0.05
-
-        self.update()
-
-    def process_keys(self):
-        """处理持续按下的按键"""
-        move_speed = 1.0
-        rot_rad_x = math.radians(self.cam_rot_x)
-        rot_rad_y = math.radians(self.cam_rot_y)
-
-        if Qt.Key_Up in self.keys_pressed:
-            self.cam_distance = max(30, self.cam_distance - 1)
-        if Qt.Key_Down in self.keys_pressed:
-            self.cam_distance = min(200, self.cam_distance + 1)
-        if Qt.Key_A in self.keys_pressed:
-            self.cam_rot_y -= 1.5
-        if Qt.Key_D in self.keys_pressed:
-            self.cam_rot_y += 1.5
-        if Qt.Key_W in self.keys_pressed:
-            self.cam_rot_x += 1.5
-            self.cam_rot_x = max(-89, min(89, self.cam_rot_x))
-        if Qt.Key_S in self.keys_pressed:
-            self.cam_rot_x -= 1.5
-            self.cam_rot_x = max(-89, min(89, self.cam_rot_x))
-
-        # 相机位置移动（基于当前朝向）
-        if Qt.Key_I in self.keys_pressed:  # 前进
-            self.cam_x += math.sin(rot_rad_y) * math.cos(rot_rad_x) * move_speed
-            self.cam_y -= math.sin(rot_rad_x) * move_speed
-            self.cam_z += math.cos(rot_rad_y) * math.cos(rot_rad_x) * move_speed
-        if Qt.Key_K in self.keys_pressed:  # 后退
-            self.cam_x -= math.sin(rot_rad_y) * math.cos(rot_rad_x) * move_speed
-            self.cam_y += math.sin(rot_rad_x) * move_speed
-            self.cam_z -= math.cos(rot_rad_y) * math.cos(rot_rad_x) * move_speed
-        if Qt.Key_J in self.keys_pressed:  # 左移
-            self.cam_x += math.cos(rot_rad_y) * move_speed
-            self.cam_z -= math.sin(rot_rad_y) * move_speed
-        if Qt.Key_L in self.keys_pressed:  # 右移
-            self.cam_x -= math.cos(rot_rad_y) * move_speed
-            self.cam_z += math.sin(rot_rad_y) * move_speed
-        if Qt.Key_U in self.keys_pressed:  # 上移
-            self.cam_y += move_speed
-        if Qt.Key_O in self.keys_pressed:  # 下移
-            self.cam_y -= move_speed
-
-    def mousePressEvent(self, event):
-        """鼠标按下事件"""
-        if event.button() == Qt.LeftButton:
-            self.dragging = True
-            self.last_pos = (event.x(), event.y())
-            self.velocity_x = 0.0
-            self.velocity_y = 0.0
-        super().mousePressEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        """鼠标释放事件"""
-        if event.button() == Qt.LeftButton:
-            self.dragging = False
-        super().mouseReleaseEvent(event)
-
-    def mouseMoveEvent(self, event):
-        """鼠标移动事件"""
-        if self.dragging:
-            dx = event.x() - self.last_pos[0]
-            dy = event.y() - self.last_pos[1]
-            self.velocity_x = dx * 0.4
-            self.velocity_y = -dy * 0.4
-            self.cam_rot_y += self.velocity_x
-            self.cam_rot_x += self.velocity_y
-            self.cam_rot_x = max(-89, min(89, self.cam_rot_x))
-            self.last_pos = (event.x(), event.y())
-        super().mouseMoveEvent(event)
-
-    def wheelEvent(self, event):
-        """鼠标滚轮事件"""
-        delta = event.angleDelta().y()
-        if delta > 0:
-            self.cam_distance = max(30, self.cam_distance - 3)
-        else:
-            self.cam_distance = min(200, self.cam_distance + 3)
-        super().wheelEvent(event)
-
-    def keyPressEvent(self, event):
-        """键盘按下事件"""
-        key = event.key()
-        self.keys_pressed.add(key)
-
-        if key == Qt.Key_Escape:
-            self.parent_window.close()
-        elif key == Qt.Key_Space:
-            self.paused = not self.paused
-        elif key == Qt.Key_Equal or key == Qt.Key_Plus:
-            self.speed = min(10.0, self.speed + 0.5)
-        elif key == Qt.Key_Minus or key == Qt.Key_Underscore:
-            self.speed = max(0.1, self.speed - 0.5)
-        elif key == Qt.Key_R:
-            self.reset_camera()
-        elif key == Qt.Key_F:
-            self.cam_rot_x = -45
-            self.cam_rot_y = self.cam_rot_y + 45
-            self.cam_distance = 70
-        super().keyPressEvent(event)
-
-    def keyReleaseEvent(self, event):
-        """键盘释放事件"""
-        self.keys_pressed.discard(event.key())
-        super().keyReleaseEvent(event)
-
-    def reset_camera(self):
-        """重置相机位置"""
-        self.cam_rot_x = -25
-        self.cam_rot_y = 0
-        self.cam_distance = 90
-        self.cam_x = 0.0
-        self.cam_y = 0.0
-        self.cam_z = 0.0
-
-
-class MainWindow(QMainWindow):
-    """主窗口"""
-
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle('太阳系 3D 模拟')
-        self.resize(1200, 800)
-
-        # 创建 OpenGL 窗口
-        self.gl_widget = SolarSystemGLWidget(self)
-        self.setCentralWidget(self.gl_widget)
-
-        # 创建菜单栏
-        self.create_menu()
-
-        # 创建状态栏
-        self.create_status_bar()
-
-    def create_menu(self):
-        """创建菜单栏"""
-        menubar = self.menuBar()
-
-        # 帮助菜单
-        help_menu = menubar.addMenu('帮助')
-
-        help_action = QAction('操作说明', self)
-        help_action.setShortcut('H')
-        help_action.triggered.connect(self.show_help)
-        help_menu.addAction(help_action)
-
-        # 关于菜单
-        about_menu = menubar.addMenu('关于')
-
-        about_action = QAction('关于程序', self)
-        about_action.triggered.connect(self.show_about)
-        about_menu.addAction(about_action)
-
-    def create_status_bar(self):
-        """创建状态栏"""
-        self.status_bar = self.statusBar()
-        self.status_label = QLabel()
-        self.status_bar.addWidget(self.status_label)
-        self.update_status_bar()
-
-    def update_status_bar(self):
-        """更新状态栏"""
-        status = "暂停" if self.gl_widget.paused else "运行中"
-        self.status_label.setText(
-            f'{status} | 速度: {self.gl_widget.speed:.1f}x | '
-            f'拖动旋转 | 滚轮缩放 | A/D旋转 | W/S俯仰 | I/J/K/L移动 | U/O升降 | R重置 | 空格暂停 | ESC退出'
+        status = "暂停" if paused else "运行中"
+        pygame.display.set_caption(
+            f'太阳系 3D 模拟 - {status} | 速度: {speed:.1f}x | '
+            f'拖动旋转 | 滚轮缩放 | A/D旋转 | W/S俯仰 | I/J/K/L移动 | U/O升降 | R重置 | H帮助 | 空格暂停 | ESC退出'
         )
 
-    def show_help(self):
-        """显示帮助对话框"""
-        help_text = """
-<h3>操作说明</h3>
-<table>
-<tr><td><b>鼠标左键拖动</b></td><td>旋转视角</td></tr>
-<tr><td><b>鼠标滚轮</b></td><td>缩放</td></tr>
-<tr><td><b>W/S</b></td><td>俯仰旋转（上/下看）</td></tr>
-<tr><td><b>A/D</b></td><td>水平旋转（左/右转）</td></tr>
-<tr><td><b>I/J/K/L</b></td><td>相机前后左右移动</td></tr>
-<tr><td><b>U/O</b></td><td>相机上/下移动</td></tr>
-<tr><td><b>↑/↓</b></td><td>缩放</td></tr>
-<tr><td><b>+/-</b></td><td>调整模拟速度</td></tr>
-<tr><td><b>空格</b></td><td>暂停/继续</td></tr>
-<tr><td><b>R</b></td><td>重置视角</td></tr>
-<tr><td><b>F</b></td><td>快速视角切换</td></tr>
-<tr><td><b>ESC</b></td><td>退出</td></tr>
-</table>
-        """
-        QMessageBox.information(self, '操作说明', help_text)
+        # 绘制菜单栏
+        draw_menu_bar_2d(font, menu_open, mouse_pos)
 
-    def show_about(self):
-        """显示关于对话框"""
-        about_text = f"""
-<h3>太阳系 3D 模拟程序</h3>
-<p><b>作者:</b> {AUTHOR_NAME}</p>
-<p><b>邮箱:</b> {AUTHOR_EMAIL}</p>
-<p><b>GitHub:</b> <a href="{GITHUB_URL}">{GITHUB_URL}</a></p>
-        """
-        QMessageBox.about(self, '关于', about_text)
+        pygame.display.flip()
+        clock.tick(60)
 
+        if not paused:
+            t += 0.05
 
-def main():
-    # macOS 需要使用 OpenGL compatibility profile，legacy glBegin/glEnd 在 core profile 下不可用
-    fmt = QSurfaceFormat.defaultFormat()
-    fmt.setProfile(QSurfaceFormat.CompatibilityProfile)
-    fmt.setVersion(2, 1)
-    QSurfaceFormat.setDefaultFormat(fmt)
-
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec_())
+    pygame.quit()
+    sys.exit()
 
 
 if __name__ == '__main__':
