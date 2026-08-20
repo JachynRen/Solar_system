@@ -216,10 +216,10 @@ MENU_ITEMS = {
         ("关于", "show_about"),
     ],
 }
-MENU_BG = (35, 35, 60)
-MENU_BORDER = (100, 140, 200)
-MENU_TEXT = (240, 240, 250)
-MENU_TITLE = (255, 210, 100)
+MENU_BG = (30, 30, 55)
+MENU_BORDER = (120, 160, 220)
+MENU_TEXT = (255, 255, 255)
+MENU_TITLE = (255, 220, 120)
 BTN_BG = (45, 45, 90)
 BTN_BORDER = (120, 160, 220)
 BTN_TEXT = (240, 240, 250)
@@ -235,7 +235,9 @@ def _draw_rect_border(surf, rect, color, width=2):
 
 
 def _render_text(font, text, color):
-    return font.render(text, True, color)
+    """渲染文字 Surface，确保带 alpha 通道"""
+    surf = font.render(text, True, color)
+    return surf.convert_alpha()
 
 
 def draw_menubar_overlay(font, mouse_pos, menu_state, game_state):
@@ -592,9 +594,10 @@ def main():
     popup_close_rect = None
 
     # 尝试用系统字体，优先用清晰的字体
+    available_fonts = pygame.font.get_fonts()
     font_name = None
-    for name in ["PingFang SC", "Hiragino Sans GB", "Arial Unicode MS", "Microsoft YaHei", "arial"]:
-        if name in [f.name for f in pygame.font.get_fonts()]:
+    for name in ["pingfangsc", "hiraginosansgb", "arialunicodems", "microsoftyahei", "arial"]:
+        if name in available_fonts:
             font_name = name
             break
     font = pygame.font.SysFont(font_name if font_name else "arial", FONT_SIZE)
