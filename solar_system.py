@@ -555,8 +555,11 @@ def main():
 
                         # 检查是否点击下拉菜单项
                         if not handled:
-                            for key, (action, ir) in rects.items():
-                                if key.startswith("item_") and ir.collidepoint(mx, my):
+                            for key, val in rects.items():
+                                if not key.startswith("item_"):
+                                    continue
+                                action, ir = val
+                                if ir.collidepoint(mx, my):
                                     if action == "quit":
                                         running = False
                                     elif action == "reset_camera":
