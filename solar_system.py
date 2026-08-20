@@ -1,6 +1,7 @@
 """
 太阳系 3D 模拟程序
 使用 Pygame + OpenGL 展示太阳系八大行星的运动轨迹
+使用 pygame-menu 提供原生风格的菜单 UI
 
 操作方式：
 - 触控板单指拖动 / 鼠标左键拖动：旋转视角
@@ -12,7 +13,7 @@
 - A/D 键：水平旋转
 - W/S 键：垂直旋转
 - R 键：重置视角
-- H 键：帮助
+- M 键：打开菜单
 - ESC：退出
 """
 
@@ -22,6 +23,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 import math
 import sys
+import pygame_menu
 
 # 作者信息
 AUTHOR_NAME = "JachynRen"
@@ -39,40 +41,6 @@ PLANETS_DATA = [
     ("天王星", 55, 0.9, 30687, (0.5, 0.85, 0.95), 3 * math.pi / 2),
     ("海王星", 68, 0.85, 60190, (0.2, 0.3, 0.9), 7 * math.pi / 4),
 ]
-
-# 菜单相关常量
-HELP_TEXT = [
-    "=== 操作说明 ===",
-    "",
-    "鼠标 / 触控板：",
-    "  左键拖动 / 单指拖动 - 旋转视角",
-    "  滚轮 / 双指捏合     - 缩放",
-    "",
-    "键盘：",
-    "  W/S        - 俯仰旋转（上/下看）",
-    "  A/D        - 水平旋转（左/右转）",
-    "  I/J/K/L    - 相机前后左右移动",
-    "  U/O        - 相机上/下移动",
-    "  ↑/↓        - 缩放",
-    "  +/-        - 调整模拟速度",
-    "  空格       - 暂停/继续",
-    "  R          - 重置视角",
-    "  F          - 快速视角切换",
-    "  H          - 显示/隐藏帮助",
-    "  ESC        - 退出",
-]
-
-ABOUT_TEXT = [
-    "太阳系 3D 模拟程序",
-    "",
-    f"作者: {AUTHOR_NAME}",
-    f"邮箱: {AUTHOR_EMAIL}",
-    f"GitHub: {GITHUB_URL}",
-]
-
-MENU_BAR_HEIGHT = 28
-MENU_DROPDOWN_WIDTH = 220
-MENU_ITEM_HEIGHT = 26
 
 
 def draw_sphere(radius, color, slices=32, stacks=32):
@@ -191,110 +159,72 @@ def draw_stars():
     glEnable(GL_LIGHTING)
 
 
-# ========== 2D UI 绘制函数 ==========
+def create_help_menu(menu_theme, width, height):
+    """创建帮助菜单"""
+    help_text = (
+        "=== 操作说明 ===\n\n"
+        "鼠标 / 触控板：\n"
+        "  左键拖动 / 单指拖动 - 旋转视角\n"
+        "  滚轮 / 双指捏合     - 缩放\n\n"
+        "键盘：\n"
+        "  W/S        - 俯仰旋转（上/下看）\n"
+        "  A/D        - 水平旋转（左/右转）\n"
+        "  I/J/K/L    - 相机前后左右移动\n"
+        "  U/O        - 相机上/下移动\n"
+        "  ↑/↓        - 缩放\n"
+        "  +/-        - 调整模拟速度\n"
+        "  空格       - 暂停/继续\n"
+        "  R          - 重置视角\n"
+        "  F          - 快速视角切换\n"
+        "  M          - 打开菜单\n"
+        "  ESC        - 退出\n"
+    )
 
-def draw_rect_2d(x, y, w, h):
-    """绘制2D矩形（填充）"""
-    glBegin(GL_QUADS)
-    glVertex2f(x, y)
-    glVertex2f(x + w, y)
-    glVertex2f(x + w, y + h)
-    glVertex2f(x, y + h)
-    glEnd()
-
-
-def draw_rect_border_2d(x, y, w, h):
-    """绘制2D矩形边框"""
-    glBegin(GL_LINE_LOOP)
-    glVertex2f(x, y)
-    glVertex2f(x + w, y)
-    glVertex2f(x + w, y + h)
-    glVertex2f(x, y + h)
-    glEnd()
-
-
-def draw_text_2d(font, text, x, y, color=(220, 220, 220)):
-    """绘制2D文字"""
-    surf = font.render(text, True, color)
-    pygame.display.get_surface().blit(surf, (x, y))
-
-
-def draw_dropdown_panel(font, lines, x, y, width):
-    """绘制下拉面板"""
-    panel_height = len(lines) * MENU_ITEM_HEIGHT + 10
-    max_h = pygame.display.get_surface().get_height()
-    actual_height = min(panel_height, max_h - y - 5)
-
-    # 面板背景
-    glColor4f(0.12, 0.12, 0.18, 0.95)
-    draw_rect_2d(x, y, width, actual_height)
-
-    # 边框
-    glColor4f(0.4, 0.4, 0.5, 1.0)
-    draw_rect_border_2d(x, y, width, actual_height)
-
-    # 文本
-    for idx, line in enumerate(lines):
-        color = (180, 180, 200) if not line.startswith("===") else (255, 200, 80)
-        draw_text_2d(font, line, x + 8, y + 5 + idx * MENU_ITEM_HEIGHT, color)
+    menu = pygame_menu.Menu('操作说明', width, height, theme=menu_theme)
+    menu.add.label(help_text, max_char=60, font_size=16, align=pygame_menu.locals.ALIGN_LEFT)
+    menu.add.button('关闭', pygame_menu.events.BACK)
+    return menu
 
 
-def draw_menu_bar_2d(font, menu_open, mouse_pos):
-    """绘制顶部菜单栏和下拉菜单（2D overlay）"""
-    glDisable(GL_DEPTH_TEST)
-    glMatrixMode(GL_PROJECTION)
-    glPushMatrix()
-    glLoadIdentity()
-    gluOrtho2D(0, pygame.display.get_surface().get_width(),
-               pygame.display.get_surface().get_height(), 0)
-    glMatrixMode(GL_MODELVIEW)
-    glPushMatrix()
-    glLoadIdentity()
-    glDisable(GL_LIGHTING)
+def create_about_menu(menu_theme, width, height):
+    """创建关于菜单"""
+    menu = pygame_menu.Menu('关于', width, height, theme=menu_theme)
+    menu.add.label(f'太阳系 3D 模拟程序', font_size=20)
+    menu.add.label('')
+    menu.add.label(f'作者: {AUTHOR_NAME}', font_size=16)
+    menu.add.label(f'邮箱: {AUTHOR_EMAIL}', font_size=14)
+    menu.add.label(f'GitHub:', font_size=14)
+    menu.add.label(GITHUB_URL, font_size=12, font_color=(100, 180, 255))
+    menu.add.label('')
+    menu.add.button('关闭', pygame_menu.events.BACK)
+    return menu
 
-    screen_w = pygame.display.get_surface().get_width()
 
-    # 菜单栏背景
-    glColor4f(0.15, 0.15, 0.2, 0.95)
-    draw_rect_2d(0, 0, screen_w, MENU_BAR_HEIGHT)
+def create_main_menu(menu_theme, width, height, help_menu, about_menu, game_state):
+    """创建主菜单"""
+    menu = pygame_menu.Menu('菜单', width, height, theme=menu_theme)
+    menu.add.button('操作说明', help_menu)
+    menu.add.button('关于', about_menu)
 
-    # 菜单项文字宽度
-    help_surf = font.render("帮助", True, (200, 200, 200))
-    about_surf = font.render("关于", True, (200, 200, 200))
-    item_w = help_surf.get_width() + 20
-    about_x = item_w + 5
-    about_w = about_surf.get_width() + 20
+    # 暂停/继续按钮
+    def toggle_pause():
+        game_state['paused'] = not game_state['paused']
 
-    # 绘制"帮助"
-    help_hover = (0 <= mouse_pos[0] <= item_w and 0 <= mouse_pos[1] <= MENU_BAR_HEIGHT) if mouse_pos else False
-    help_color = (70, 180, 220) if help_hover else (220, 220, 220)
-    draw_text_2d(font, "帮助", 15, 5, help_color)
+    def update_pause_label():
+        return '继续' if game_state['paused'] else '暂停'
 
-    # 绘制"关于"
-    about_hover = (about_x <= mouse_pos[0] <= about_x + about_w and 0 <= mouse_pos[1] <= MENU_BAR_HEIGHT) if mouse_pos else False
-    about_color = (70, 180, 220) if about_hover else (220, 220, 220)
-    draw_text_2d(font, "关于", about_x + 10, 5, about_color)
-
-    # 绘制下拉菜单
-    if menu_open == "help":
-        draw_dropdown_panel(font, HELP_TEXT, 5, MENU_BAR_HEIGHT, MENU_DROPDOWN_WIDTH)
-    elif menu_open == "about":
-        draw_dropdown_panel(font, ABOUT_TEXT, about_x, MENU_BAR_HEIGHT, MENU_DROPDOWN_WIDTH)
-
-    glEnable(GL_LIGHTING)
-    glMatrixMode(GL_MODELVIEW)
-    glPopMatrix()
-    glMatrixMode(GL_PROJECTION)
-    glPopMatrix()
-    glMatrixMode(GL_MODELVIEW)
-    glEnable(GL_DEPTH_TEST)
+    menu.add.selector('速度:', [(f'{s:.1f}x', s) for s in [0.5, 1.0, 2.0, 3.0, 5.0, 10.0]],
+                      onchange=lambda _, val: game_state.__setitem__('speed', val))
+    menu.add.button(update_pause_label, toggle_pause)
+    menu.add.button('返回模拟', pygame_menu.events.BACK)
+    return menu
 
 
 def main():
     pygame.init()
 
     width, height = 1200, 800
-    pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL | RESIZABLE)
+    screen = pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL | RESIZABLE)
     pygame.display.set_caption('太阳系 3D 模拟')
 
     # 启用光照
@@ -339,25 +269,48 @@ def main():
     velocity_y = 0.0
     damping = 0.92
 
-    # 菜单状态
-    menu_open = None  # "help", "about", or None
-    mouse_pos = (0, 0)
-    font = pygame.font.SysFont("arial", 14)
+    # 游戏状态（供菜单引用）
+    game_state = {'paused': False, 'speed': 1.0}
+
+    # pygame-menu 主题
+    theme = pygame_menu.themes.THEME_BLUE.copy()
+    theme.title_background_color = (30, 30, 50)
+    theme.widget_alignment = pygame_menu.locals.ALIGN_CENTER
+
+    # 创建菜单
+    help_menu = create_help_menu(theme, 500, 600)
+    about_menu = create_about_menu(theme, 450, 400)
+    main_menu = create_main_menu(theme, 400, 500, help_menu, about_menu, game_state)
+
+    # 菜单按钮栏位置
+    menu_btn_rect = pygame.Rect(10, 10, 60, 30)
 
     while running:
-        for event in pygame.event.get():
+        events = pygame.event.get()
+        for event in events:
             if event.type == QUIT:
                 running = False
+
+            elif main_menu.is_enabled():
+                # 菜单打开时处理菜单事件
+                if main_menu.update(events):
+                    pass
+                # 同步游戏状态
+                paused = game_state['paused']
+                speed = game_state['speed']
 
             elif event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
                     running = False
                 elif event.key == K_SPACE:
                     paused = not paused
+                    game_state['paused'] = paused
                 elif event.key == K_PLUS or event.key == K_EQUALS:
                     speed = min(10.0, speed + 0.5)
+                    game_state['speed'] = speed
                 elif event.key == K_MINUS or event.key == K_UNDERSCORE:
                     speed = max(0.1, speed - 0.5)
+                    game_state['speed'] = speed
                 elif event.key == K_r:
                     cam_rot_x = -25
                     cam_rot_y = 0
@@ -369,28 +322,19 @@ def main():
                     cam_rot_x = -45
                     cam_rot_y = cam_rot_y + 45
                     cam_distance = 70
-                elif event.key == K_h:
-                    menu_open = "help" if menu_open != "help" else None
+                elif event.key == K_m:
+                    main_menu.enable()
 
             elif event.type == MOUSEBUTTONDOWN:
                 if event.button == 1:
-                    mx, my = event.pos
-                    if my <= MENU_BAR_HEIGHT:
-                        help_surf = font.render("帮助", True, (200, 200, 200))
-                        item_w = help_surf.get_width() + 20
-                        if mx <= item_w:
-                            menu_open = "help" if menu_open != "help" else None
-                        else:
-                            about_x = item_w + 5
-                            about_w = help_surf.get_width() + 20
-                            if about_x <= mx <= about_x + about_w:
-                                menu_open = "about" if menu_open != "about" else None
+                    # 检查菜单按钮点击
+                    if menu_btn_rect.collidepoint(event.pos):
+                        main_menu.enable()
                     else:
-                        menu_open = None
                         dragging = True
-                    last_pos = event.pos
-                    velocity_x = 0.0
-                    velocity_y = 0.0
+                        last_pos = event.pos
+                        velocity_x = 0.0
+                        velocity_y = 0.0
                 elif event.button == 4:
                     cam_distance = max(30, cam_distance - 3)
                 elif event.button == 5:
@@ -401,7 +345,6 @@ def main():
                     dragging = False
 
             elif event.type == MOUSEMOTION:
-                mouse_pos = event.pos
                 if dragging:
                     dx = event.pos[0] - last_pos[0]
                     dy = event.pos[1] - last_pos[1]
@@ -411,6 +354,55 @@ def main():
                     cam_rot_x += velocity_y
                     cam_rot_x = max(-89, min(89, cam_rot_x))
                     last_pos = event.pos
+
+        # 如果菜单打开，只绘制菜单
+        if main_menu.is_enabled() or help_menu.is_enabled() or about_menu.is_enabled():
+            # 先渲染 3D 场景作为背景
+            glClearColor(0.02, 0.02, 0.05, 1.0)
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+            glLoadIdentity()
+            glTranslatef(-cam_x, -cam_y, -cam_z)
+            glTranslatef(0, 0, cam_distance)
+            glRotatef(cam_rot_x, 1, 0, 0)
+            glRotatef(cam_rot_y, 0, 1, 0)
+
+            glPushMatrix()
+            glRotatef(-cam_rot_y, 0, 1, 0)
+            glRotatef(-cam_rot_x, 1, 0, 0)
+            draw_stars()
+            glPopMatrix()
+
+            draw_sun()
+
+            for name, orbit_radius, radius, period, color, angle in PLANETS_DATA:
+                draw_orbit(orbit_radius)
+                angular_velocity = 2 * math.pi / period
+                current_angle = angle + angular_velocity * t * speed
+                px = orbit_radius * math.cos(current_angle)
+                pz = orbit_radius * math.sin(current_angle)
+
+                glPushMatrix()
+                glTranslatef(px, 0, pz)
+                if name == "土星":
+                    glPushMatrix()
+                    glRotatef(25, 1, 0, 0)
+                    draw_saturn_ring(radius * 1.4, radius * 2.3)
+                    glPopMatrix()
+                draw_sphere(radius, color)
+                glPopMatrix()
+
+            # 绘制菜单覆盖层
+            if main_menu.is_enabled():
+                main_menu.draw(screen)
+            elif help_menu.is_enabled():
+                help_menu.draw(screen)
+            elif about_menu.is_enabled():
+                about_menu.draw(screen)
+
+            pygame.display.flip()
+            clock.tick(60)
+            continue
 
         # 惯性滑动
         if not dragging:
@@ -499,14 +491,22 @@ def main():
             draw_sphere(radius, color)
             glPopMatrix()
 
+        # 绘制顶部菜单按钮
         status = "暂停" if paused else "运行中"
         pygame.display.set_caption(
             f'太阳系 3D 模拟 - {status} | 速度: {speed:.1f}x | '
-            f'拖动旋转 | 滚轮缩放 | A/D旋转 | W/S俯仰 | I/J/K/L移动 | U/O升降 | R重置 | H帮助 | 空格暂停 | ESC退出'
+            f'拖动旋转 | 滚轮缩放 | A/D旋转 | W/S俯仰 | I/J/K/L移动 | U/O升降 | R重置 | M菜单 | 空格暂停 | ESC退出'
         )
 
-        # 绘制菜单栏
-        draw_menu_bar_2d(font, menu_open, mouse_pos)
+        # 菜单按钮
+        btn_surf = pygame.Surface((menu_btn_rect.w, menu_btn_rect.h))
+        btn_surf.fill((40, 40, 80))
+        pygame.draw.rect(btn_surf, (100, 150, 200), btn_surf.get_rect(), 2)
+        font = pygame.font.SysFont("arial", 16)
+        text_surf = font.render("☰ 菜单", True, (220, 220, 220))
+        text_rect = text_surf.get_rect(center=menu_btn_rect.center)
+        screen.blit(btn_surf, menu_btn_rect.topleft)
+        screen.blit(text_surf, text_rect)
 
         pygame.display.flip()
         clock.tick(60)
