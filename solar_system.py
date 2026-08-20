@@ -22,6 +22,11 @@ from OpenGL.GLU import *
 import math
 import sys
 
+# 作者信息
+AUTHOR_NAME = "JachynRen"
+AUTHOR_EMAIL = "jachynren@example.com"
+GITHUB_URL = "https://github.com/JachynRen/Solar_system"
+
 # 行星数据：(名称, 轨道半径, 半径, 公转周期(天), 颜色RGB, 初始角度)
 PLANETS_DATA = [
     ("水星", 8, 0.35, 88, (0.7, 0.7, 0.7), 0),
@@ -151,6 +156,139 @@ def draw_stars():
     glEnable(GL_LIGHTING)
 
 
+# 菜单相关常量
+HELP_TEXT = [
+    "=== 操作说明 ===",
+    "",
+    "鼠标 / 触控板：",
+    "  左键拖动 / 单指拖动 - 旋转视角",
+    "  滚轮 / 双指捏合     - 缩放",
+    "",
+    "键盘：",
+    "  W/S        - 俯仰旋转（上/下看）",
+    "  A/D        - 水平旋转（左/右转）",
+    "  I/J/K/L    - 相机前后左右移动",
+    "  U/O        - 相机上/下移动",
+    "  ↑/↓        - 缩放",
+    "  +/-        - 调整模拟速度",
+    "  空格       - 暂停/继续",
+    "  R          - 重置视角",
+    "  H          - 显示/隐藏帮助",
+    "  ESC        - 退出",
+]
+
+MENU_BAR_HEIGHT = 28
+MENU_DROPDOWN_WIDTH = 180
+MENU_ITEM_HEIGHT = 30
+
+
+def draw_menu_bar_2d(font, menu_open, show_menu, mouse_pos):
+    """绘制顶部菜单栏和下拉菜单（2D overlay）"""
+    glDisable(GL_DEPTH_TEST)
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+    gluOrtho2D(0, pygame.display.get_surface().get_width(),
+               pygame.display.get_surface().get_height(), 0)
+    glMatrixMode(GL_MODELVIEW)
+    glPushMatrix()
+    glLoadIdentity()
+    glDisable(GL_LIGHTING)
+
+    screen_w = pygame.display.get_surface().get_width()
+    screen_h = pygame.display.get_surface().get_height()
+
+    # 菜单栏背景
+    glColor4f(0.15, 0.15, 0.2, 0.95)
+    draw_rect_2d(0, 0, screen_w, MENU_BAR_HEIGHT)
+
+    # 菜单项
+    menu_items = [("帮助", show_menu), ("关于", show_menu)]
+    x_offset = 10
+    font_surf = font.render("帮助", True, (200, 200, 200))
+    item_w = font_surf.get_width() + 20
+
+    # 绘制"帮助"
+    help_hover = (0 <= mouse_pos[0] <= item_w and 0 <= mouse_pos[1] <= MENU_BAR_HEIGHT) if mouse_pos else False
+    help_color = (70, 180, 220) if help_hover else (220, 220, 220)
+    glColor3f(help_color[0]/255, help_color[1]/255, help_color[2]/255)
+    draw_text_2d(font, "帮助", 15, 5, help_color)
+
+    # 绘制"关于"
+    about_x = item_w + 5
+    about_w = font_surf.get_width() + 20
+    about_hover = (about_x <= mouse_pos[0] <= about_x + about_w and 0 <= mouse_pos[1] <= MENU_BAR_HEIGHT) if mouse_pos else False
+    about_color = (70, 180, 220) if about_hover else (220, 220, 220)
+    draw_text_2d(font, "关于", about_x + 10, 5, about_color)
+
+    # 绘制下拉菜单
+    if menu_open == "help":
+        draw_dropdown_panel(font, HELP_TEXT, 5, MENU_BAR_HEIGHT, MENU_DROPDOWN_WIDTH)
+    elif menu_open == "about":
+        about_lines = [
+            f"太阳系 3D 模拟程序",
+            f"",
+            f"作者: {AUTHOR_NAME}",
+            f"邮箱: {AUTHOR_EMAIL}",
+            f"GitHub: {GITHUB_URL}",
+        ]
+        draw_dropdown_panel(font, about_lines, about_x, MENU_BAR_HEIGHT, MENU_DROPDOWN_WIDTH + 100)
+
+    glEnable(GL_LIGHTING)
+    glMatrixMode(GL_MODELVIEW)
+    glPopMatrix()
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
+    glEnable(GL_DEPTH_TEST)
+
+
+def draw_dropdown_panel(font, lines, x, y, width):
+    """绘制下拉面板"""
+    panel_height = len(lines) * MENU_ITEM_HEIGHT + 10
+    max_h = pygame.display.get_surface().get_height()
+    actual_height = min(panel_height, max_h - y - 5)
+
+    # 面板背景
+    glColor4f(0.12, 0.12, 0.18, 0.95)
+    draw_rect_2d(x, y, width, actual_height)
+
+    # 边框
+    glColor4f(0.4, 0.4, 0.5, 1.0)
+    draw_rect_border_2d(x, y, width, actual_height)
+
+    # 文本
+    for idx, line in enumerate(lines):
+        color = (180, 180, 200) if not line.startswith("===") else (255, 200, 80)
+        draw_text_2d(font, line, x + 8, y + 5 + idx * MENU_ITEM_HEIGHT, color)
+
+
+def draw_rect_2d(x, y, w, h):
+    """绘制2D矩形（填充）"""
+    glBegin(GL_QUADS)
+    glVertex2f(x, y)
+    glVertex2f(x + w, y)
+    glVertex2f(x + w, y + h)
+    glVertex2f(x, y + h)
+    glEnd()
+
+
+def draw_rect_border_2d(x, y, w, h):
+    """绘制2D矩形边框"""
+    glBegin(GL_LINE_LOOP)
+    glVertex2f(x, y)
+    glVertex2f(x + w, y)
+    glVertex2f(x + w, y + h)
+    glVertex2f(x, y + h)
+    glEnd()
+
+
+def draw_text_2d(font, text, x, y, color=(220, 220, 220)):
+    """绘制2D文字"""
+    surf = font.render(text, True, color)
+    pygame.display.get_surface().blit(surf, (x, y))
+
+
 def main():
     pygame.init()
     
@@ -199,6 +337,11 @@ def main():
     velocity_x = 0.0
     velocity_y = 0.0
     damping = 0.92  # 阻尼系数
+
+    # 菜单状态
+    menu_open = None  # "help", "about", or None
+    mouse_pos = (0, 0)
+    font = pygame.font.SysFont("arial", 14)
     
     while running:
         for event in pygame.event.get():
@@ -227,10 +370,28 @@ def main():
                     cam_rot_x = -45
                     cam_rot_y = cam_rot_y + 45
                     cam_distance = 70
+                elif event.key == K_h:
+                    # 切换帮助菜单
+                    menu_open = "help" if menu_open != "help" else None
             
             elif event.type == MOUSEBUTTONDOWN:
                 if event.button == 1:
-                    dragging = True
+                    # 检查菜单栏点击
+                    mx, my = event.pos
+                    if my <= MENU_BAR_HEIGHT:
+                        font_surf = font.render("帮助", True, (200, 200, 200))
+                        item_w = font_surf.get_width() + 20
+                        if mx <= item_w:
+                            menu_open = "help" if menu_open != "help" else None
+                        else:
+                            about_x = item_w + 5
+                            about_w = font_surf.get_width() + 20
+                            if about_x <= mx <= about_x + about_w:
+                                menu_open = "about" if menu_open != "about" else None
+                    else:
+                        # 点击菜单外区域，关闭菜单
+                        menu_open = None
+                        dragging = True
                     last_pos = event.pos
                     velocity_x = 0.0
                     velocity_y = 0.0
@@ -244,6 +405,7 @@ def main():
                     dragging = False
             
             elif event.type == MOUSEMOTION:
+                mouse_pos = event.pos
                 if dragging:
                     dx = event.pos[0] - last_pos[0]
                     dy = event.pos[1] - last_pos[1]
@@ -344,9 +506,12 @@ def main():
         status = "暂停" if paused else "运行中"
         pygame.display.set_caption(
             f'太阳系 3D 模拟 - {status} | 速度: {speed:.1f}x | '
-            f'拖动旋转 | 滚轮缩放 | A/D旋转 | W/S俯仰 | I/J/K/L移动 | U/O升降 | R重置 | 空格暂停 | ESC退出'
+            f'拖动旋转 | 滚轮缩放 | A/D旋转 | W/S俯仰 | I/J/K/L移动 | U/O升降 | R重置 | H帮助 | 空格暂停 | ESC退出'
         )
-        
+
+        # 绘制菜单栏和下拉菜单
+        draw_menu_bar_2d(font, menu_open, True, mouse_pos)
+
         pygame.display.flip()
         clock.tick(60)
         
