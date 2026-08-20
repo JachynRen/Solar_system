@@ -1,73 +1,125 @@
-# 太阳系 3D 模拟
+# 太阳系 3D 模拟器 v1.0.0
 
-使用 Python + Pygame + OpenGL 实现的太阳系八大行星运动 3D 可视化程序。
+> 使用 Python + Pygame + OpenGL 实现的太阳系八大行星运动 3D 可视化程序
 
-## 功能特性
+<p align="center">
+  <b>作者</b>: JachynRen &nbsp;|&nbsp;
+  <b>邮箱</b>: jachynren@example.com &nbsp;|&nbsp;
+  <b>GitHub</b>: <a href="https://github.com/JachynRen/Solar_system">Solar_system</a>
+</p>
 
-- **太阳**：位于中心，带有多层光晕发光效果和点光源照明
-- **八大行星**：水星、金星、地球、火星、木星、土星、天王星、海王星
-- **轨道线**：每个行星的轨道路径可视化
-- **土星环**：土星特有的倾斜光环效果
-- **星空背景**：500 颗随机生成的星星点缀
-- **3D 交互视角**：支持旋转、缩放观察
-- **触控板支持**：双指拖动旋转、双指捏合缩放
+---
 
-## 环境要求
+## ✨ 功能特性
 
-- macOS / Windows / Linux
-- Python 3.11+
-- 支持 OpenGL 的显卡
+- 🌞 **太阳**：位于中心，带多层光晕发光效果和点光源照明
+- 🪐 **八大行星**：水星、金星、地球、火星、木星、土星、天王星、海王星
+- ⭕ **轨道线**：每个行星的轨道路径可视化
+- 💫 **土星环**：土星特有的倾斜光环效果
+- 🌌 **星空背景**：500 颗随机生成的星星
+- 🎥 **自由相机**：支持旋转、缩放、前后左右移动、上下升降
+- 📋 **菜单栏**：顶部原生风格菜单，支持文件、视图、模拟、帮助操作
 
-## 快速开始
+---
 
-### 1. 激活虚拟环境
+## 📸 截图
+
+![截图](screenshots/solar_system.png)
+
+---
+
+## 🖥️ 运行方式
+
+### 方式一：从源码运行
 
 ```bash
-cd /Users/jachyn/Desktop/my_computer/development/universe
+# 1. 克隆仓库
+git clone https://github.com/JachynRen/Solar_system.git
+cd Solar_system
+
+# 2. 创建并激活虚拟环境
+python3 -m venv .venv
 source .venv/bin/activate
-```
 
-### 2. 安装依赖
+# 3. 安装依赖
+pip install -r requirements.txt
 
-```bash
-pip install pygame PyOpenGL PyOpenGL_accelerate
-```
-
-### 3. 运行程序
-
-```bash
+# 4. 运行
 python solar_system.py
 ```
 
-## 操作方式
+### 方式二：直接运行打包应用（macOS）
 
-### 触控板操作
+```bash
+# 下载 Release 中的 太阳系模拟器.app，双击即可运行
+```
 
-| 手势 | 功能 |
-|------|------|
-| **双指拖动** | 旋转视角（上下左右） |
-| **双指捏合** | 缩放（靠近/远离太阳） |
+---
 
-### 键盘操作
+## 🎮 操作方式
 
-| 按键 | 功能 |
-|------|------|
-| **空格键** | 暂停/继续模拟 |
-| **+ 键** | 加速模拟（最大 10x） |
-| **- 键** | 减速模拟（最小 0.1x） |
-| **↑ 方向键** | 放大（靠近太阳） |
-| **↓ 方向键** | 缩小（远离太阳） |
-| **ESC** | 退出程序 |
-
-### 鼠标操作
+### 鼠标 / 触控板
 
 | 操作 | 功能 |
 |------|------|
-| **左键拖动** | 旋转视角 |
-| **滚轮上滚** | 放大 |
-| **滚轮下滚** | 缩小 |
+| 左键拖动 / 单指拖动 | 旋转视角 |
+| 滚轮 / 双指捏合 | 缩放 |
 
-## 行星数据
+### 键盘
+
+| 按键 | 功能 |
+|------|------|
+| W / S | 俯仰旋转（上/下看） |
+| A / D | 水平旋转（左/右转） |
+| I / J / K / L | 相机前后左右移动 |
+| U / O | 相机上/下移动 |
+| ↑ / ↓ | 缩放 |
+| + / - | 调整模拟速度 |
+| 空格 | 暂停/继续 |
+| R | 重置视角 |
+| F | 快速视角切换 |
+| M | 打开帮助说明 |
+| ESC | 退出 |
+
+### 顶部菜单栏
+
+| 菜单 | 功能项 |
+|------|--------|
+| **文件** | 重置视角、退出 |
+| **视图** | 默认视角、俯视、侧视 |
+| **模拟** | 暂停/继续、加速、减速 |
+| **帮助** | 操作说明、关于 |
+
+---
+
+## 📦 打包
+
+### macOS 打包为 .app 应用
+
+```bash
+# 一键打包
+./build.sh
+
+# 或手动执行
+.venv/bin/pip install pyinstaller
+.venv/bin/pyinstaller --name "太阳系模拟器" --onedir --windowed solar_system.py
+```
+
+打包产物位于 `dist/太阳系模拟器.app`，可直接复制到 `/Applications` 运行。
+
+### 其他平台
+
+```bash
+# Windows
+pyinstaller --name "太阳系模拟器" --onedir --windowed solar_system.py
+
+# Linux
+pyinstaller --name "solar_system" --onedir --windowed solar_system.py
+```
+
+---
+
+## 🪐 行星数据
 
 程序中的行星参数基于真实天文数据（轨道半径和大小经过非线性缩放以适应可视化效果）：
 
@@ -82,61 +134,61 @@ python solar_system.py
 | 天王星 | 30,687 | 55 | 0.9 | 青蓝色 |
 | 海王星 | 60,190 | 68 | 0.85 | 深蓝色 |
 
-## 技术实现
+---
 
-### 技术栈
+## 🔧 技术栈
 
-- **Pygame**：窗口管理、事件处理、动画帧率控制
-- **PyOpenGL**：OpenGL 3D 渲染 API
-- **OpenGL 固定管线**：光照、材质、深度测试、混合模式
+| 组件 | 用途 |
+|------|------|
+| **Pygame** | 窗口管理、事件处理、帧率控制 |
+| **PyOpenGL** | OpenGL 3D 渲染 API |
+| **OpenGL 固定管线** | 光照、材质、深度测试、混合模式 |
+| **PyInstaller** | 打包为独立应用程序 |
 
 ### 渲染特性
 
-- 太阳：多层半透明光晕 + 中心点光源（GL_LIGHT0）
-- 行星：使用 GL_QUAD_STRIP 手动绘制的球体，带环境光和漫反射材质
-- 轨道：GL_LINE_LOOP 绘制的圆环
+- 太阳：多层半透明光晕 + 中心点光源（`GL_LIGHT0`）
+- 行星：使用 `GL_QUAD_STRIP` 手动绘制的球体，带环境光和漫反射材质
+- 轨道：`GL_LINE_LOOP` 绘制的圆环
 - 土星环：倾斜 25° 的双半径圆环
-- 星空：500 个随机分布的 GL_POINTS
+- 星空：500 个随机分布的 `GL_POINTS`
+- 菜单：OpenGL 正交投影 + 文字纹理 overlay
 
-### 物理模型
+---
 
-- 简化圆轨道模型（实际行星轨道为椭圆）
-- 角速度 = 2π / 公转周期
-- 轨道半径和行星大小使用非线性缩放以保证可视化效果
-
-## 项目结构
+## 📁 项目结构
 
 ```
-universe/
-├── solar_system.py    # 主程序（~280 行）
-├── requirements.txt   # Python 依赖
-├── .venv/             # Python 虚拟环境
-└── README.md          # 项目说明文档
+Solar_system/
+├── solar_system.py      # 主程序
+├── requirements.txt     # Python 依赖
+├── build.sh             # macOS 一键打包脚本
+├── .gitignore           # Git 忽略规则
+└── README.md            # 项目说明文档
 ```
 
-## 常见问题
+---
+
+## ❓ 常见问题
 
 ### 窗口打开但显示黑屏
 
-确保你的系统支持 OpenGL 图形加速。在 macOS 上通常没有问题。可以尝试：
+确保你的系统支持 OpenGL 图形加速。
+
 ```bash
-# 检查 OpenGL 版本
-glxinfo | grep "OpenGL version"
+# macOS 检查 OpenGL 版本
+system_profiler SPDisplaysDataType | grep OpenGL
 ```
 
 ### 运行卡顿
 
 程序默认运行在 60 FPS，如果卡顿可以尝试：
 1. 缩小窗口
-2. 减少球体绘制的 slices/stacks 数量
+2. 减少球体绘制的 `slices/stacks` 数量
 
-### 触控板手势不生效
+---
 
-macOS 的触控板手势在 Pygame 中可能需要系统设置支持。确保：
-- 系统偏好设置 > 触控板 > 已启用双指滚动
-- 尝试使用键盘方向键替代缩放
-
-## 扩展方向
+## 🚀 扩展方向
 
 - [ ] 添加行星名称标签（OpenGL 文字渲染）
 - [ ] 添加小行星带
@@ -145,6 +197,8 @@ macOS 的触控板手势在 Pygame 中可能需要系统设置支持。确保：
 - [ ] 支持保存/加载模拟状态
 - [ ] 更真实的椭圆轨道（开普勒方程）
 
-## 许可证
+---
+
+## 📄 许可证
 
 MIT License
