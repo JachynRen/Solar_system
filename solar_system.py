@@ -185,15 +185,15 @@ ABOUT_LINES = [
     f"GitHub: {GITHUB_URL}",
 ]
 
-FONT_SIZE = 16
-LINE_H = 24
-MENU_PAD = 15
+FONT_SIZE = 18
+LINE_H = 28
+MENU_PAD = 18
 
 # 顶部菜单栏
-MENUBAR_H = 26
-MENUBAR_BG = (50, 50, 70)
-MENUBAR_TEXT = (220, 220, 230)
-MENUBAR_HOVER = (80, 80, 130)
+MENUBAR_H = 30
+MENUBAR_BG = (40, 40, 65)
+MENUBAR_TEXT = (240, 240, 250)
+MENUBAR_HOVER = (70, 70, 120)
 
 # 菜单定义
 MENU_ITEMS = {
@@ -216,14 +216,14 @@ MENU_ITEMS = {
         ("关于", "show_about"),
     ],
 }
-MENU_BG = (25, 25, 45)
-MENU_BORDER = (80, 120, 180)
-MENU_TEXT = (220, 220, 230)
-MENU_TITLE = (255, 200, 80)
-BTN_BG = (40, 40, 80)
-BTN_BORDER = (100, 150, 200)
-BTN_TEXT = (220, 220, 220)
-BTN_HOVER = (60, 60, 120)
+MENU_BG = (35, 35, 60)
+MENU_BORDER = (100, 140, 200)
+MENU_TEXT = (240, 240, 250)
+MENU_TITLE = (255, 210, 100)
+BTN_BG = (45, 45, 90)
+BTN_BORDER = (120, 160, 220)
+BTN_TEXT = (240, 240, 250)
+BTN_HOVER = (70, 70, 140)
 
 
 def _draw_filled_rect(surf, rect, color):
@@ -428,13 +428,16 @@ def _gl_rect_border(x, y, w, h):
 def _gl_blit_text(txt_surf, x, y, screen_w, screen_h):
     """将 pygame Surface 作为纹理绘制到 OpenGL 矩形上"""
     tw, th = txt_surf.get_width(), txt_surf.get_height()
-    # 将 pygame surface 转为像素数据
     data = pygame.image.tostring(txt_surf, 'RGBA', True)
     glEnable(GL_TEXTURE_2D)
     tex = glGenTextures(1)
     glBindTexture(GL_TEXTURE_2D, tex)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tw, th, 0, GL_RGBA, GL_UNSIGNED_BYTE, data)
 
     glColor4f(1, 1, 1, 1)
@@ -447,6 +450,7 @@ def _gl_blit_text(txt_surf, x, y, screen_w, screen_h):
 
     glDeleteTextures([tex])
     glDisable(GL_TEXTURE_2D)
+    glDisable(GL_BLEND)
 
 
 def draw_scene(cam, speed, t, paused):
@@ -586,6 +590,14 @@ def main():
     # 存储每帧的菜单 rect（用于事件检测）
     menu_rects = {}
     popup_close_rect = None
+
+    # 尝试用系统字体，优先用清晰的字体
+    font_name = None
+    for name in ["PingFang SC", "Hiragino Sans GB", "Arial Unicode MS", "Microsoft YaHei", "arial"]:
+        if name in [f.name for f in pygame.font.get_fonts()]:
+            font_name = name
+            break
+    font = pygame.font.SysFont(font_name if font_name else "arial", FONT_SIZE)
 
     while running:
         # ---- 先处理事件 ----
