@@ -519,4 +519,7 @@ def main():
 
 
 if __name__ == '__main__':
+    import os
+    # 抑制 macOS 输入法警告
+    os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
     main()
