@@ -1,1 +1,2 @@
-# Add your project dependencies here
+PyQt5>=5.15
+PyOpenGL>=3.1
