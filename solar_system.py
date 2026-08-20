@@ -24,6 +24,7 @@ import math
 import sys
 
 # 作者信息
+VERSION = "1.0.0"
 AUTHOR_NAME = "JachynRen"
 AUTHOR_EMAIL = "jachynren@example.com"
 GITHUB_URL = "https://github.com/JachynRen/Solar_system"
@@ -176,6 +177,14 @@ HELP_LINES = [
     "ESC            退出",
 ]
 
+ABOUT_LINES = [
+    f"太阳系 3D 模拟 v{VERSION}",
+    "",
+    f"作者: {AUTHOR_NAME}",
+    f"邮箱: {AUTHOR_EMAIL}",
+    f"GitHub: {GITHUB_URL}",
+]
+
 FONT_SIZE = 16
 LINE_H = 24
 MENU_PAD = 15
@@ -217,12 +226,7 @@ def draw_menu_overlay(surf, font, menu_open, mouse_pos, game_state):
     # ---- 弹窗 ----
     if menu_open:
         # 计算弹窗尺寸
-        lines = HELP_LINES + [
-            "",
-            f"作者: {AUTHOR_NAME}",
-            f"邮箱: {AUTHOR_EMAIL}",
-            f"GitHub: {GITHUB_URL}",
-        ]
+        lines = HELP_LINES + ["", "---"] + ABOUT_LINES
         max_char_w = max(font.size(line)[0] for line in lines)
         panel_w = max_char_w + MENU_PAD * 2
         panel_h = len(lines) * LINE_H + MENU_PAD * 2 + 40  # 额外给关闭按钮留空间
@@ -240,14 +244,16 @@ def draw_menu_overlay(surf, font, menu_open, mouse_pos, game_state):
         _draw_rect_border(surf, panel_rect, MENU_BORDER)
 
         # 标题
-        title = _render_text(font, "菜单", MENU_TITLE)
+        title = _render_text(font, f"菜单 v{VERSION}", MENU_TITLE)
         surf.blit(title, (panel_x + MENU_PAD, panel_y + MENU_PAD))
 
         # 内容行
         y = panel_y + MENU_PAD + LINE_H + 5
         for line in lines:
-            if line.startswith("==="):
+            if line.startswith("===") or line.startswith("太阳系"):
                 c = MENU_TITLE
+            elif line.startswith("---"):
+                c = (100, 100, 130)
             elif line.startswith("作者") or line.startswith("邮箱") or line.startswith("GitHub"):
                 c = (150, 180, 220)
             else:
@@ -363,7 +369,7 @@ def main():
 
     width, height = 1200, 800
     screen = pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL | RESIZABLE)
-    pygame.display.set_caption('太阳系 3D 模拟')
+    pygame.display.set_caption(f'太阳系 3D 模拟 v{VERSION}')
 
     # 启用光照
     glEnable(GL_LIGHTING)
