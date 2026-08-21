@@ -41,6 +41,145 @@ PLANETS_DATA = [
     ("海王星", 68, 0.85, 60190, (0.2, 0.3, 0.9), 7 * math.pi / 4),
 ]
 
+# 卫星数据：(名称, 父行星, 轨道半径, 半径, 公转周期(天), 颜色RGB, 初始角度)
+SATELLITES_DATA = [
+    ("月球", "地球", 2.5, 0.2, 27.3, (0.85, 0.85, 0.85), 0),
+]
+
+# 星球科普信息
+PLANET_INFO = {
+    "太阳": {
+        "type": "恒星",
+        "diameter": "1,392,700 km",
+        "distance": "0 km",
+        "period": "N/A",
+        "temperature": "表面约 5,500°C",
+        "description": "太阳是太阳系的中心天体，一颗G型主序星，占太阳系总质量的99.86%。",
+    },
+    "水星": {
+        "type": "类地行星",
+        "diameter": "4,879 km",
+        "distance": "5,790万 km",
+        "period": "88天",
+        "temperature": "-173°C ~ 427°C",
+        "description": "水星是距太阳最近的行星，也是太阳系中最小的行星，表面布满陨石坑。",
+    },
+    "金星": {
+        "type": "类地行星",
+        "diameter": "12,104 km",
+        "distance": "1.082亿 km",
+        "period": "225天",
+        "temperature": "约 462°C",
+        "description": "金星是太阳系中最热的行星，浓厚的二氧化碳大气层产生强烈的温室效应。",
+    },
+    "地球": {
+        "type": "类地行星",
+        "diameter": "12,756 km",
+        "distance": "1.496亿 km",
+        "period": "365.25天",
+        "temperature": "-89°C ~ 57°C",
+        "description": "地球是已知唯一存在生命的天体，拥有液态水海洋和含氧大气层。",
+    },
+    "月球": {
+        "type": "卫星",
+        "diameter": "3,474 km",
+        "distance": "距地球38.4万 km",
+        "period": "27.3天",
+        "temperature": "-173°C ~ 127°C",
+        "description": "月球是地球唯一的天然卫星，也是人类唯一踏足过的地外天体，对地球潮汐有重要影响。",
+    },
+    "火星": {
+        "type": "类地行星",
+        "diameter": "6,792 km",
+        "distance": "2.279亿 km",
+        "period": "687天",
+        "temperature": "-140°C ~ 20°C",
+        "description": "火星被称为红色星球，表面富含氧化铁，拥有太阳系最高的火山——奥林帕斯山。",
+    },
+    "木星": {
+        "type": "气态巨行星",
+        "diameter": "142,984 km",
+        "distance": "7.786亿 km",
+        "period": "11.86年",
+        "temperature": "约 -110°C（云顶）",
+        "description": "木星是太阳系最大的行星，其质量是其他所有行星总和的2.5倍，著名的大红斑是一个持续数百年的风暴。",
+    },
+    "土星": {
+        "type": "气态巨行星",
+        "diameter": "120,536 km",
+        "distance": "14.34亿 km",
+        "period": "29.46年",
+        "temperature": "约 -140°C（云顶）",
+        "description": "土星以其壮观的环系统闻名，环主要由冰粒和岩石碎片组成，密度比水还低。",
+    },
+    "天王星": {
+        "type": "冰巨行星",
+        "diameter": "51,118 km",
+        "distance": "28.71亿 km",
+        "period": "84.01年",
+        "temperature": "约 -195°C",
+        "description": "天王星的自转轴几乎平躺在轨道面上，倾斜角达98°，是太阳系中唯一'躺着转'的行星。",
+    },
+    "海王星": {
+        "type": "冰巨行星",
+        "diameter": "49,528 km",
+        "distance": "45.04亿 km",
+        "period": "164.8年",
+        "temperature": "约 -200°C",
+        "description": "海王星是太阳系最远的行星，拥有最强的风暴，风速可达2,100 km/h。",
+    },
+}
+
+
+def _project_3d_to_2d(x3d, y3d, z3d, cam, width, height):
+    """将 3D 世界坐标投影到 2D 屏幕坐标。
+
+    严格遵循 OpenGL draw_scene 中的变换顺序。
+    OpenGL 的变换是右乘，所以应用到顶点的顺序是从后往前：
+        实际渲染顺序: Ry -> Rx -> T(0,0,distance) -> T(-cam.x, -cam.y, -cam.z)
+    """
+    rx = math.radians(cam['rot_x'])
+    ry = math.radians(cam['rot_y'])
+
+    x = float(x3d)
+    y = float(y3d)
+    z = float(z3d)
+
+    # 1) 先应用绕 Y 轴旋转 (最后声明的变换最先应用)
+    cx = x * math.cos(ry) - z * math.sin(ry)
+    cz = x * math.sin(ry) + z * math.cos(ry)
+    x, z = cx, cz
+
+    # 2) 再应用绕 X 轴旋转
+    cy = y * math.cos(rx) - z * math.sin(rx)
+    cz = y * math.sin(rx) + z * math.cos(rx)
+    y, z = cy, cz
+
+    # 3) 再应用相机距离 T(0, 0, distance)
+    z += cam['distance']
+
+    # 4) 最后应用相机平移 T(-cam.x, -cam.y, -cam.z)
+    x -= cam['x']
+    y -= cam['y']
+    z -= cam['z']
+
+    if z <= 0.1:
+        return None  # 物体在相机后面
+
+    # 5) 透视投影 (与 gluPerspective 60° FOV 一致)
+    fov = 60.0
+    aspect = width / height
+    f = 1.0 / math.tan(math.radians(fov / 2.0))
+
+    nx = (f / aspect) * (x / z)
+    ny = f * (y / z)
+
+    # NDC [-1,1] -> 屏幕像素
+    sx = (nx * 0.5 + 0.5) * width
+    sy = (-ny * 0.5 + 0.5) * height
+
+    return (sx, sy)
+
 
 def draw_sphere(radius, color, slices=32, stacks=32):
     """绘制一个球体"""
@@ -175,6 +314,13 @@ HELP_LINES = [
     "F              快速视角切换",
     "M              打开菜单",
     "ESC            退出",
+    "",
+    "--- 触控板手势 ---",
+    "单指拖动       旋转视角",
+    "双指轻点       暂停/继续",
+    "双指拖动       旋转视角",
+    "右键/双指轻按  重置视角",
+    "捏合           缩放",
 ]
 
 ABOUT_LINES = [
@@ -455,6 +601,164 @@ def _gl_blit_text(txt_surf, x, y, screen_w, screen_h):
     glDisable(GL_BLEND)
 
 
+def _calc_planet_screen_positions(cam, planet_positions, speed, t, width, height):
+    """计算所有星球（太阳 + 行星 + 卫星）在当前帧的屏幕位置和点击半径。
+
+    返回字典: {name: (screen_x, screen_y, click_radius)}
+    """
+    positions = {}
+
+    # 太阳位置 (0, 0, 0)
+    sp = _project_3d_to_2d(0, 0, 0, cam, width, height)
+    if sp is not None:
+        # 太阳的屏幕点击半径根据其在 3D 中的大小估算
+        positions["太阳"] = (sp[0], sp[1], 30)  # 增大点击半径
+
+    # 行星
+    for name, orbit_radius, radius, period, color, angle in PLANETS_DATA:
+        angular_velocity = 2 * math.pi / period
+        current_angle = angle + angular_velocity * t * speed
+        px = orbit_radius * math.cos(current_angle)
+        pz = orbit_radius * math.sin(current_angle)
+
+        sp = _project_3d_to_2d(px, 0, pz, cam, width, height)
+        if sp is not None:
+            click_radius = max(18, int(radius * 12))  # 增大点击半径
+            positions[name] = (sp[0], sp[1], click_radius)
+
+    # 卫星
+    for sat_name, parent_name, sat_orbit_radius, sat_radius, sat_period, sat_color, sat_angle in SATELLITES_DATA:
+        if parent_name in planet_positions:
+            ppx, ppz = planet_positions[parent_name]
+            sat_angular_velocity = 2 * math.pi / sat_period
+            sat_current_angle = sat_angle + sat_angular_velocity * t * speed
+            sx = ppx + sat_orbit_radius * math.cos(sat_current_angle)
+            sz = ppz + sat_orbit_radius * math.sin(sat_current_angle)
+
+            sp = _project_3d_to_2d(sx, 0, sz, cam, width, height)
+            if sp is not None:
+                click_radius = max(12, int(sat_radius * 15))  # 增大卫星点击半径
+                positions[sat_name] = (sp[0], sp[1], click_radius)
+
+    return positions
+
+
+# 信息面板颜色
+INFO_BG = (25, 25, 50)
+INFO_BORDER = (120, 160, 220)
+INFO_TITLE = (255, 220, 120)
+INFO_LABEL = (160, 180, 220)
+INFO_VALUE = (240, 240, 250)
+INFO_LINE = (60, 60, 100)
+
+
+def draw_planet_info_overlay(font, mouse_pos, planet_name, planet_positions):
+    """用 OpenGL 绘制星球科普信息面板。"""
+    width, height = pygame.display.get_surface().get_size()
+
+    if planet_name not in PLANET_INFO:
+        return None, None
+
+    info = PLANET_INFO[planet_name]
+    lines = [
+        ("名称", planet_name),
+        ("类型", info["type"]),
+        ("直径", info["diameter"]),
+        ("距太阳", info["distance"]),
+        ("公转周期", info["period"]),
+        ("温度", info["temperature"]),
+        ("简介", info["description"]),
+    ]
+
+    # 计算面板尺寸
+    label_max_w = max(font.size(label)[0] for label, _ in lines)
+    value_max_w = max(font.size(val)[0] for _, val in lines)
+    title_w = font.size(planet_name)[0]
+
+    panel_w = max(title_w, label_max_w + value_max_w + 20) + MENU_PAD * 2 + 20
+    panel_h = (len(lines) + 1) * LINE_H + MENU_PAD * 2 + 30
+    panel_x = (width - panel_w) // 2
+    panel_y = (height - panel_h) // 2
+    panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+
+    glDisable(GL_DEPTH_TEST)
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+    gluOrtho2D(0, width, height, 0)
+    glMatrixMode(GL_MODELVIEW)
+    glPushMatrix()
+    glLoadIdentity()
+    glDisable(GL_LIGHTING)
+
+    # 遮罩
+    glColor4f(0, 0, 0, 0.35)
+    _gl_rect(0, 0, width, height)
+
+    # 面板背景
+    glColor4f(INFO_BG[0]/255, INFO_BG[1]/255, INFO_BG[2]/255, 0.95)
+    _gl_rect(panel_x, panel_y, panel_w, panel_h)
+    # 边框
+    glColor4f(INFO_BORDER[0]/255, INFO_BORDER[1]/255, INFO_BORDER[2]/255, 1.0)
+    _gl_rect_border(panel_x, panel_y, panel_w, panel_h)
+
+    # 标题
+    txt_surf = _render_text(font, planet_name, INFO_TITLE)
+    _gl_blit_text(txt_surf, panel_x + MENU_PAD, panel_y + MENU_PAD, width, height)
+
+    # 分隔线
+    sep_y = panel_y + MENU_PAD + LINE_H
+    glColor4f(INFO_LINE[0]/255, INFO_LINE[1]/255, INFO_LINE[2]/255, 1.0)
+    glBegin(GL_LINES)
+    glVertex2f(panel_x + MENU_PAD, sep_y)
+    glVertex2f(panel_x + panel_w - MENU_PAD, sep_y)
+    glEnd()
+
+    # 信息行
+    y = sep_y + LINE_H // 2 + 5
+    for label, value in lines:
+        lbl_surf = _render_text(font, label + ":", INFO_LABEL)
+        _gl_blit_text(lbl_surf, panel_x + MENU_PAD, y, width, height)
+        val_surf = _render_text(font, value, INFO_VALUE)
+        _gl_blit_text(val_surf, panel_x + MENU_PAD + label_max_w + 10, y, width, height)
+        y += LINE_H
+
+    # 关闭按钮
+    close_w, close_h = 70, 26
+    close_x = panel_x + (panel_w - close_w) // 2
+    close_y = panel_y + panel_h - close_h - 10
+    close_rect = pygame.Rect(close_x, close_y, close_w, close_h)
+    ch = close_rect.collidepoint(mouse_pos)
+    c_color = BTN_HOVER if ch else BTN_BG
+    glColor4f(c_color[0]/255, c_color[1]/255, c_color[2]/255, 1.0)
+    _gl_rect(close_x, close_y, close_w, close_h)
+    glColor4f(BTN_BORDER[0]/255, BTN_BORDER[1]/255, BTN_BORDER[2]/255, 1.0)
+    _gl_rect_border(close_x, close_y, close_w, close_h)
+    txt_surf = _render_text(font, "关闭", BTN_TEXT)
+    _gl_blit_text(txt_surf, close_x + close_w//2 - txt_surf.get_width()//2,
+                  close_y + close_h//2 - txt_surf.get_height()//2, width, height)
+
+    glEnable(GL_LIGHTING)
+    glMatrixMode(GL_MODELVIEW)
+    glPopMatrix()
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
+    glEnable(GL_DEPTH_TEST)
+
+    return close_rect, panel_rect
+
+
+def draw_satellite_orbit(radius):
+    """绘制卫星轨道圆环（相对于已变换的坐标系）"""
+    glColor3f(0.5, 0.5, 0.6)
+    glBegin(GL_LINE_LOOP)
+    for i in range(64):
+        angle = 2 * math.pi * i / 64
+        glVertex3f(radius * math.cos(angle), 0, radius * math.sin(angle))
+    glEnd()
+
+
 def draw_scene(cam, speed, t, paused):
     """绘制 3D 场景"""
     glClearColor(0.02, 0.02, 0.05, 1.0)
@@ -475,12 +779,18 @@ def draw_scene(cam, speed, t, paused):
 
     draw_sun()
 
+    # 存储行星位置供卫星使用
+    planet_positions = {}
+
     for name, orbit_radius, radius, period, color, angle in PLANETS_DATA:
         draw_orbit(orbit_radius)
         angular_velocity = 2 * math.pi / period
         current_angle = angle + angular_velocity * t * speed
         px = orbit_radius * math.cos(current_angle)
         pz = orbit_radius * math.sin(current_angle)
+
+        # 存储行星位置
+        planet_positions[name] = (px, pz)
 
         glPushMatrix()
         glTranslatef(px, 0, pz)
@@ -491,6 +801,31 @@ def draw_scene(cam, speed, t, paused):
             glPopMatrix()
         draw_sphere(radius, color)
         glPopMatrix()
+
+    # 绘制卫星
+    for sat_name, parent_name, sat_orbit_radius, sat_radius, sat_period, sat_color, sat_angle in SATELLITES_DATA:
+        if parent_name in planet_positions:
+            ppx, ppz = planet_positions[parent_name]
+            # 计算卫星位置
+            sat_angular_velocity = 2 * math.pi / sat_period
+            sat_current_angle = sat_angle + sat_angular_velocity * t * speed
+            sx = ppx + sat_orbit_radius * math.cos(sat_current_angle)
+            sz = ppz + sat_orbit_radius * math.sin(sat_current_angle)
+
+            # 绘制卫星轨道（在父行星位置）
+            glPushMatrix()
+            glTranslatef(ppx, 0, ppz)
+            draw_satellite_orbit(sat_orbit_radius)
+            glPopMatrix()
+
+            # 绘制卫星
+            glPushMatrix()
+            glTranslatef(sx, 0, sz)
+            draw_sphere(sat_radius, sat_color)
+            glPopMatrix()
+
+    # 返回行星位置信息用于点击检测
+    return planet_positions
 
 
 def process_camera(cam, keys, dragging, velocity, damping):
@@ -586,12 +921,16 @@ def main():
 
     menu_state = {"open_menu": None}  # 顶部菜单状态
     popup_mode = None  # 'help' 或 'about' 弹窗模式
+    selected_planet = None  # 当前选中的星球（显示科普面板）
+    planet_screen_positions = {}  # 星球屏幕位置: {name: (sx, sy, radius)}
     mouse_pos = (0, 0)
     font = pygame.font.SysFont("arial", FONT_SIZE)
 
     # 存储每帧的菜单 rect（用于事件检测）
     menu_rects = {}
     popup_close_rect = None
+    info_close_rect = None
+    info_panel_rect = None
 
     # 尝试用系统字体，优先用清晰的字体
     available_fonts = pygame.font.get_fonts()
@@ -631,7 +970,7 @@ def main():
                     popup_mode = "help" if popup_mode != "help" else None
 
             elif event.type == MOUSEBUTTONDOWN:
-                if event.button == 1:
+                if event.button == 1:  # 左键/触控板点击
                     mx, my = event.pos
                     handled = False
 
@@ -641,8 +980,14 @@ def main():
                             popup_mode = None
                             handled = True
 
+                    # 2) 关闭星球信息面板按钮
+                    if not handled and selected_planet and info_close_rect:
+                        if info_close_rect.collidepoint(mx, my):
+                            selected_planet = None
+                            handled = True
+
                     if not handled:
-                        # 2) 菜单栏点击
+                        # 3) 点击菜单区域 → 菜单交互
                         item_rects = menu_rects.get("menu_items", {})
 
                         # 检查是否点击菜单标题
@@ -695,14 +1040,39 @@ def main():
                                     handled = True
                                     break
 
-                        # 3) 点击空白关闭菜单
+                        # 4) 点击空白关闭菜单 / 点击星球
                         if not handled:
                             menu_state["open_menu"] = None
-                            dragging = True
+
+                            # 检测是否点击了某个星球
+                            clicked_planet = None
+                            for pname, (sx, sy, cr) in planet_screen_positions.items():
+                                dist = math.sqrt((mx - sx) ** 2 + (my - sy) ** 2)
+                                if dist < cr:
+                                    clicked_planet = pname
+                                    break
+
+                            if clicked_planet and not popup_mode:
+                                selected_planet = clicked_planet
+                                handled = True
+                            elif not selected_planet:
+                                dragging = True
 
                     last_pos = event.pos
                     velocity['x'] = velocity['y'] = 0.0
-                elif event.button == 4:
+
+                elif event.button == 2:  # 中键/触控板双指点击
+                    # 双指点击：切换暂停状态
+                    paused = not paused
+
+                elif event.button == 3:  # 右键/触控板双指轻点
+                    # 右键点击：重置视角
+                    cam['rot_x'] = -25
+                    cam['rot_y'] = 0
+                    cam['distance'] = 90
+                    cam['x'] = cam['y'] = cam['z'] = 0.0
+
+                elif event.button == 4:  # 滚轮向上
                     cam['distance'] = max(30, cam['distance'] - 3)
                 elif event.button == 5:
                     cam['distance'] = min(200, cam['distance'] + 3)
@@ -728,7 +1098,11 @@ def main():
         process_camera(cam, keys, dragging, velocity, damping)
 
         # ---- 渲染 ----
-        draw_scene(cam, speed, t, paused)
+        planet_positions = draw_scene(cam, speed, t, paused)
+
+        # 计算星球屏幕位置（用于点击检测和信息面板）
+        width, height = pygame.display.get_surface().get_size()
+        planet_screen_positions = _calc_planet_screen_positions(cam, planet_positions, speed, t, width, height)
 
         # ---- 2D overlay ----
         # 顶部菜单栏 + 下拉菜单（保存 rect 供下一帧事件检测用）
@@ -740,6 +1114,14 @@ def main():
             popup_close_rect, _ = draw_help_about_overlay(font, mouse_pos, popup_mode)
         else:
             popup_close_rect = None
+
+        # 星球科普信息面板
+        if selected_planet and not popup_mode:
+            info_close_rect, info_panel_rect = draw_planet_info_overlay(
+                font, mouse_pos, selected_planet, planet_screen_positions)
+        else:
+            info_close_rect = None
+            info_panel_rect = None
 
         pygame.display.flip()
         clock.tick(60)
